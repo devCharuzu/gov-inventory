@@ -53,6 +53,11 @@ def _contains_placeholder(value: str) -> bool:
 
 
 _is_production = settings.ENVIRONMENT.lower() in {"production", "prod"}
+if os.environ.get("VERCEL") == "1":
+    # Never let a Vercel deployment silently fall back to an ephemeral local
+    # SQLite file when production environment variables were not configured.
+    _is_production = True
+    settings.ENVIRONMENT = "production"
 if _contains_placeholder(settings.DATABASE_URL):
     if _is_production:
         raise RuntimeError(

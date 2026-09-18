@@ -6,6 +6,9 @@ tabular reports) are rendered directly.
 """
 
 import sys
+import ctypes
+import os
+from functools import lru_cache
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -24,6 +27,7 @@ _env = Environment(
 )
 
 
+@lru_cache(maxsize=1)
 def _weasyprint_html():
     """Import WeasyPrint lazily.
 
@@ -32,6 +36,22 @@ def _weasyprint_html():
     at startup. Importing here means the app always boots — only the PDF
     endpoints fail (with a clear error) when the libraries are absent.
     """
+    native = Path(__file__).resolve().parents[2] / "native" / "lib"
+    if native.is_dir():
+        os.environ["FONTCONFIG_FILE"] = str(native.parents[1] / "fontconfig.xml")
+        # dlopen's search path is fixed at process startup. Preload the bundled
+        # libraries by absolute path in dependency order instead of mutating it.
+        pending = list(native.glob("*.so*"))
+        while pending:
+            remaining = []
+            for library in pending:
+                try:
+                    ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
+                except OSError:
+                    remaining.append(library)
+            if len(remaining) == len(pending):
+                raise RuntimeError("Unable to load bundled PDF libraries: " + ", ".join(p.name for p in remaining))
+            pending = remaining
     from weasyprint import HTML
 
     return HTML

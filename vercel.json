@@ -3,7 +3,8 @@
   "framework": "vite",
   "trailingSlash": false,
   "installCommand": "npm --prefix frontend ci",
-  "buildCommand": "npm --prefix frontend run build",
+  "buildCommand": "bash scripts/bundle-pdf-libraries.sh && npm --prefix frontend run build",
+  "functions": { "api/index.py": { "includeFiles": "backend/**" } },
   "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index.py" },

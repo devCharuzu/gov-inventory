@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir prefix="relative">native/fonts</dir>
+  <cachedir>/tmp/inventory-font-cache</cachedir>
+  <alias><family>serif</family><prefer><family>DejaVu Serif</family></prefer></alias>
+  <alias><family>sans-serif</family><prefer><family>DejaVu Sans</family></prefer></alias>
+  <alias><family>Times New Roman</family><prefer><family>DejaVu Serif</family></prefer></alias>
+</fontconfig>

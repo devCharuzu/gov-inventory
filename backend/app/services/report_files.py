@@ -5,6 +5,7 @@ restarts. The same path works with local SQLite for development.
 """
 
 import re
+import logging
 import uuid as _uuid
 from datetime import datetime, timezone
 
@@ -90,6 +91,7 @@ def save_transaction_report(db: Session, txn: Transaction) -> str | None:
         db.commit()
         return name
     except Exception:  # pragma: no cover - report generation is best effort
+        logging.getLogger(__name__).exception("Could not generate transaction PDF")
         db.rollback()
         return None
 

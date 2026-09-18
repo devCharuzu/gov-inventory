@@ -12,6 +12,8 @@ export const api = axios.create({
 
 // Attach the bearer token (if any) to every outgoing request.
 api.interceptors.request.use((config) => {
+  // Vercel uses slash-free URLs; avoid redirects on writes.
+  if (config.url) config.url = config.url.replace(/\/(?=\?|$)/, "");
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

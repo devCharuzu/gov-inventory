@@ -23,6 +23,7 @@ references = []
 
 
 def call(path, method="GET", body=None, form=False, expected=200):
+    path = path.rstrip("/")
     headers = {}
     if token:
         headers["Authorization"] = "Bearer " + token

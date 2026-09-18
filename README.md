@@ -52,6 +52,18 @@ The migration at `supabase/migrations/0001_inventory_schema.sql` has been applie
 
 The new cloud database starts empty. Keep the local SQLite database and generated reports until the existing records have been intentionally imported and verified. Do not delete them as part of a deployment cleanup.
 
+The configured runtime connection uses the dedicated `inventory_app` role, not
+the database owner. Its migration grants CRUD access only to the nine inventory
+tables through role-specific RLS policies. API publishable/secret keys are not
+needed by this architecture. Keep the generated runtime URL in the ignored
+`backend/.env` and Vercel's sensitive production environment variables.
+
+To verify a deployment with temporary records, run
+`backend/venv/bin/python scripts/verify_deployment.py https://gov-inventory.vercel.app`.
+This reads credentials from the ignored environment file, tests stock and PDF
+workflows, and removes its temporary records. Login audit entries and allocated
+document numbers are retained.
+
 ## Vercel deployment
 
 The Vercel project must use the repository root as its Root Directory. The committed `vercel.json` installs and builds the frontend from `frontend/`, while `api/index.py` exposes the FastAPI API under `/api/*`.

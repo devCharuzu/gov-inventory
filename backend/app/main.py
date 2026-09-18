@@ -64,6 +64,21 @@ for _router in (
     app.include_router(_router, prefix="/api")
 
 
+_collection_paths = {
+    route.path.rstrip("/")
+    for route in app.routes
+    if route.path.startswith("/api/") and route.path.endswith("/")
+}
+
+
+@app.middleware("http")
+async def normalize_collection_paths(request: Request, call_next):
+    """Accept Vercel's slash-free URLs without redirecting POST requests."""
+    if request.scope["path"] in _collection_paths:
+        request.scope["path"] += "/"
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log method, path, status, and duration for every request."""

@@ -1,0 +1,38 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Python environments, caches, and local tooling
+backend/venv/
+backend/**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local SQLite data and SQLite runtime files
+backend/gov_inventory.db
+backend/gov_inventory.db-*
+*.sqlite
+*.sqlite3
+
+# Generated report files and local build output
+backend/generated_reports/*
+backend/static/
+frontend/dist/
+frontend/node_modules/
+node_modules/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Vercel local project metadata
+.vercel/

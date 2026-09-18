@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Inventory Receiving Report</title>
+  <style>
+    @page { size: A4; margin: 1.5cm 1.8cm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Times New Roman", Georgia, serif;
+      color: #000;
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .letterhead {
+      display: table;
+      width: 100%;
+      border-bottom: 2px solid #000;
+      padding-bottom: 10px;
+      margin-bottom: 6px;
+    }
+    .letterhead .logo-cell,
+    .letterhead .agency-cell {
+      display: table-cell;
+      vertical-align: middle;
+    }
+    .logo-cell { width: 80px; }
+    .logo-img { width: 70px; height: 70px; object-fit: contain; }
+    .agency-cell { text-align: center; }
+    .agency-cell .republic { font-size: 12px; letter-spacing: 0.5px; }
+    .agency-cell .department {
+      font-size: 15px; font-weight: bold; text-transform: uppercase;
+      margin: 2px 0;
+    }
+    .agency-cell .office { font-size: 11px; font-style: italic; }
+    .doc-title {
+      text-align: center;
+      font-size: 15px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 14px 0 4px;
+    }
+    .doc-subtitle { text-align: center; font-size: 11px; margin-bottom: 14px; }
+    .meta {
+      display: table; width: 100%; margin-bottom: 12px; font-size: 12px;
+    }
+    .meta .row { display: table-row; }
+    .meta .label {
+      display: table-cell; font-weight: bold; padding: 2px 8px 2px 0;
+      white-space: nowrap; width: 1%;
+    }
+    .meta .value {
+      display: table-cell; border-bottom: 1px solid #000; padding: 2px 6px;
+    }
+    .meta .spacer { display: table-cell; width: 24px; }
+    table.data {
+      width: 100%; border-collapse: collapse; margin: 8px 0 18px;
+    }
+    table.data th, table.data td {
+      border: 1px solid #000; padding: 6px 8px; font-size: 11px;
+      text-align: left; vertical-align: top;
+    }
+    table.data th {
+      background: #000; color: #fff; text-transform: uppercase;
+      font-size: 10px; letter-spacing: 0.5px;
+    }
+    table.data tbody tr:nth-child(even) { background: #ececec; }
+    table.data td.num { text-align: center; width: 70px; }
+    .remarks-box {
+      border: 1px solid #000; min-height: 48px; padding: 6px 8px;
+      margin-bottom: 22px;
+    }
+    .remarks-box .heading {
+      font-weight: bold; text-transform: uppercase; font-size: 10px;
+      letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .signatures { display: table; width: 100%; margin-top: 30px; }
+    .signatures .sig {
+      display: table-cell; width: 33.33%; text-align: center;
+      padding: 0 10px; vertical-align: bottom;
+    }
+    .sig .role {
+      text-transform: uppercase; font-size: 10px; font-weight: bold;
+      letter-spacing: 0.5px; margin-bottom: 30px; text-align: left;
+    }
+    .sig .line { border-top: 1px solid #000; padding-top: 3px; }
+    /* Fixed height keeps all three signature blocks aligned whether or not
+       a name is filled in (no &nbsp; hacks, which skewed the layout). */
+    .sig .name { font-weight: bold; text-transform: uppercase; font-size: 11px; min-height: 14px; }
+    .sig .position { font-size: 10px; font-style: italic; }
+    .sig .date { font-size: 10px; margin-top: 6px; }
+    .footer-note {
+      margin-top: 26px; font-size: 9px; color: #333; text-align: center;
+      border-top: 1px solid #999; padding-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="letterhead">
+    <div class="logo-cell">
+      <img class="logo-img" src="philfida-logo.png" alt="PhilFIDA">
+    </div>
+    <div class="agency-cell">
+      <div class="republic">Republic of the Philippines</div>
+      <div class="office">Department of Agriculture</div>
+      <div class="department">Philippine Fiber Industry Development Authority (PhilFIDA)</div>
+      <div class="office">{{ region }}</div>
+    </div>
+    <div class="logo-cell">&nbsp;</div>
+  </div>
+
+  <div class="doc-title">Inventory Receiving Report</div>
+  <div class="doc-subtitle">(Acceptance of Delivered Supplies and Materials)</div>
+
+  <div class="meta">
+    <div class="row">
+      <div class="label">IRR No.:</div>
+      <div class="value">{{ transaction.reference_number }}</div>
+      <div class="spacer"></div>
+      <div class="label">Date Received:</div>
+      <div class="value">{{ received_date }}</div>
+    </div>
+  </div>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th class="num">Qty</th>
+        <th>Unit</th>
+        <th>Item Code</th>
+        <th>Description</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">{{ transaction.quantity }}</td>
+        <td>{{ item.unit or "pc(s)" }}</td>
+        <td>{{ item.code }}</td>
+        <td>{{ item.name }}{% if item.description %} &mdash; {{ item.description }}{% endif %}</td>
+        <td>{{ transaction.condition or "Good / New" }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="remarks-box">
+    <div class="heading">Remarks</div>
+    {{ transaction.remarks or transaction.purpose or "" }}
+  </div>
+
+  <div class="signatures">
+    <div class="sig">
+      <div class="role">Prepared by:</div>
+      <div class="line">
+        <div class="name">{{ prepared_by or "" }}</div>
+        <div class="position">{{ prepared_by_position or "Receiving Officer" }}</div>
+        <div class="date">Date: ____________</div>
+      </div>
+    </div>
+    <div class="sig">
+      <div class="role">Checked by:</div>
+      <div class="line">
+        <div class="name"></div>
+        <div class="position">Inspection Officer</div>
+        <div class="date">Date: ____________</div>
+      </div>
+    </div>
+    <div class="sig">
+      <div class="role">Approved by:</div>
+      <div class="line">
+        <div class="name"></div>
+        <div class="position">Head of Office</div>
+        <div class="date">Date: ____________</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    This is a system-generated document from the Philfida Inventory System.
+    Reference No. {{ transaction.reference_number }}.
+  </div>
+</body>
+</html>

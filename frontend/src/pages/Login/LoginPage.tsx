@@ -71,7 +71,7 @@ export default function LoginPage() {
             className="mx-auto mb-2 h-16 w-16 object-contain"
           />
           <CardTitle className="text-xl text-primary">
-            Philfida Inventory System
+            Supply Inventory System
           </CardTitle>
           <CardDescription>Authorized access only</CardDescription>
         </CardHeader>

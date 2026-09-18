@@ -1,1 +1,21 @@
--r backend/requirements.txt
+annotated-types
+anyio
+bcrypt
+email-validator
+fastapi
+Jinja2
+MarkupSafe
+numpy
+pandas
+pillow
+psycopg[binary]
+pydantic
+pydantic-settings
+python-dateutil
+python-dotenv
+python-jose
+python-multipart
+SQLAlchemy
+uvicorn
+weasyprint
+websockets

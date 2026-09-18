@@ -4,14 +4,14 @@ import logging
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
-from app.database import SessionLocal, engine
+from app.database import SessionLocal, engine, get_db
 from app.models import Base, User, UserRole
 from app.routers import (
     analytics,
@@ -92,9 +92,9 @@ async def http_exception_handler(
 async def unhandled_exception_handler(
     request: Request, exc: Exception
 ) -> JSONResponse:
-    """Return any unhandled error as a 500 with its message."""
+    """Return a generic 500 without exposing database or configuration details."""
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 def _ensure_schema(db) -> None:
@@ -185,9 +185,10 @@ def health() -> dict:
 
 
 @app.get("/api/health")
-def api_health() -> dict:
+def api_health(db=Depends(get_db)) -> dict:
     """Health probe under the Vercel function's /api path."""
-    return health()
+    db.execute(text("SELECT 1"))
+    return {**health(), "database": "connected", "environment": settings.ENVIRONMENT}
 
 
 @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)

@@ -781,7 +781,7 @@ function BackupTab() {
           Database Backup
         </CardTitle>
         <CardDescription>
-          Download a full copy of the SQLite database for safekeeping.
+          Download inventory records as JSON for safekeeping. PDF contents are excluded.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -823,7 +823,6 @@ function AppInfoTab() {
   const rows: [string, string][] = [
     ["Application", "Philfida Inventory System"],
     ["Version", "1.0.0"],
-    ["Database", "SQLite — gov_inventory.db"],
     ["Total Users", counts ? String(counts.users) : "…"],
     ["Total Items", counts ? String(counts.items) : "…"],
     ["Total Transactions", counts ? String(counts.transactions) : "…"],

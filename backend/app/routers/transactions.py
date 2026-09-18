@@ -73,7 +73,7 @@ def _get_item_or_404(
 ) -> Item:
     query = db.query(Item).filter(Item.id == item_id)
     if lock:
-        query = query.with_for_update()
+        query = query.with_for_update(of=Item)
     item = query.first()
     if not item:
         raise HTTPException(

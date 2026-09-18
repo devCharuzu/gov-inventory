@@ -10,7 +10,7 @@ export const backupService = {
       | string
       | undefined;
     const match = disposition?.match(/filename="?([^"]+)"?/);
-    const filename = match?.[1] ?? "gov_inventory-backup.db";
+    const filename = match?.[1] ?? "gov_inventory-backup.json";
 
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");

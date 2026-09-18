@@ -76,6 +76,8 @@ if _db_path:
         settings.DATABASE_URL = f"sqlite:///{_db_path}"
 
 if _is_production:
+    if settings.DATABASE_URL.startswith("sqlite"):
+        raise RuntimeError("Production requires a persistent PostgreSQL DATABASE_URL.")
     if settings.SECRET_KEY == _DEFAULT_SECRET_KEY or len(settings.SECRET_KEY) < 32:
         raise RuntimeError(
             "Production requires a SECRET_KEY with at least 32 characters."

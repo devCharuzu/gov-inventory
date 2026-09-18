@@ -15,6 +15,8 @@ Inventory and asset management for PhilFIDA Regional Office XIII. The production
 
 Requirements: Node.js/npm and Python 3.
 
+The frontend lockfile is committed so the Vercel build can use a reproducible `npm ci` installation.
+
 ```bash
 ./start-local.sh
 ```

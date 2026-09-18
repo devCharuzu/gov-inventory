@@ -50,6 +50,7 @@ app.add_middleware(
 )
 
 # Routers, all mounted under /api (each router carries its own sub-prefix).
+_collection_paths: set[str] = set()
 for _router in (
     auth.router,
     items.router,
@@ -61,14 +62,12 @@ for _router in (
     backup.router,
     signatories.router,
 ):
+    _collection_paths.update(
+        "/api" + route.path.rstrip("/")
+        for route in _router.routes
+        if getattr(route, "path", "").endswith("/")
+    )
     app.include_router(_router, prefix="/api")
-
-
-_collection_paths = {
-    route.path.rstrip("/")
-    for route in app.routes
-    if route.path.startswith("/api/") and route.path.endswith("/")
-}
 
 
 @app.middleware("http")

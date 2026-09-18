@@ -55,4 +55,6 @@ cp backend/.env.example backend/.env
 
 Fill in `backend/.env` with the Supabase **Transaction pooler** connection string from Dashboard → Connect and a newly generated `SECRET_KEY`. The real `.env` file is ignored by Git and must never be committed.
 
+The API publishable key is safe for browser use when a frontend integration needs it. A key beginning with `sb_secret_` is server-only; rotate it if it has been shared, and keep it only in backend/Vercel server environment variables. It is not a database connection password, so the Postgres pooler URL and database password are still required for this FastAPI/SQLAlchemy backend.
+
 For Vercel, add the same values in the project Environment Variables settings and scope them to the appropriate environment. Do not use `VITE_` or `NEXT_PUBLIC_` prefixes for database credentials or signing secrets; client-prefixed variables are exposed to the browser. Never place a Supabase service-role/secret key in frontend code.

@@ -44,13 +44,15 @@ def _weasyprint_html():
         pending = list(native.glob("*.so*"))
         while pending:
             remaining = []
+            errors = []
             for library in pending:
                 try:
                     ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
-                except OSError:
+                except OSError as exc:
                     remaining.append(library)
+                    errors.append(str(exc))
             if len(remaining) == len(pending):
-                raise RuntimeError("Unable to load bundled PDF libraries: " + ", ".join(p.name for p in remaining))
+                raise RuntimeError("Unable to load bundled PDF libraries: " + "; ".join(errors))
             pending = remaining
     from weasyprint import HTML
 

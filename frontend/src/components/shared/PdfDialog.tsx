@@ -30,7 +30,7 @@ export default function PdfDialog({
 
   return (
     <Dialog open={!!url} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[94vh] w-[96vw] max-w-[1400px] gap-2 p-3 sm:p-4">
+      <DialogContent className="h-[94vh] !w-[96vw] !max-w-[1400px] gap-2 p-3 sm:p-4">
         <DialogHeader>
           <DialogTitle className="text-base">{title}</DialogTitle>
         </DialogHeader>

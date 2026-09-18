@@ -33,7 +33,7 @@ Copy the example file when configuring a local environment:
 cp backend/.env.example backend/.env
 ```
 
-For local SQLite development, leave `DATABASE_URL` unset or use the SQLite default. For production-like local testing, set the exact Supabase Transaction pooler URL from Dashboard → Connect. A URL that still contains `<PROJECT_REF>` or another example placeholder is rejected in production and safely falls back to SQLite in development.
+For local SQLite development, leave `DATABASE_URL` unset or use the SQLite default. For production-like local testing, use Supabase Dashboard → Connect → Direct → Transaction pooler → URI. For this project, the template is `postgresql+psycopg://postgres.rvqsekwderfgcgmvicgo:<URL_ENCODED_DATABASE_PASSWORD>@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require`. Replace only the password placeholder and URL-encode special characters. A URL that still contains an example placeholder is rejected in production and safely falls back to SQLite in development.
 
 Required production settings:
 

@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "trailingSlash": false,
+  "regions": ["syd1"],
   "installCommand": "npm --prefix frontend ci",
   "buildCommand": "bash scripts/bundle-pdf-libraries.sh && npm --prefix frontend run build",
   "functions": { "api/index.py": { "includeFiles": "backend/**" } },

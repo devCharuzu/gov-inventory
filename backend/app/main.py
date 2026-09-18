@@ -40,8 +40,9 @@ WEB_INDEX = WEB_ROOT / "index.html"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        origin.strip()
+        for origin in settings.CORS_ORIGINS.split(",")
+        if origin.strip()
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -102,6 +103,9 @@ def _ensure_schema(db) -> None:
     Adds columns introduced after a table was first created so existing
     databases stay compatible without dropping any data.
     """
+    if db.get_bind().dialect.name != "sqlite":
+        return
+
     additive = {
         "signatories": {"unit": "VARCHAR(200)"},
         "users": {"position": "VARCHAR(200)"},
@@ -119,33 +123,57 @@ def _ensure_schema(db) -> None:
 
 @app.on_event("startup")
 def on_startup() -> None:
-    """Create tables, verify integrity, and seed a default admin user if none exist."""
-    Base.metadata.create_all(bind=engine)  # additive only — never drops existing tables
+    """Prepare local development and verify the deployed schema.
+
+    Production schema changes are applied through reviewed Supabase migrations,
+    never during a Vercel cold start.
+    """
+    if settings.AUTO_CREATE_SCHEMA:
+        Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
-        _ensure_schema(db)
+        if settings.AUTO_CREATE_SCHEMA:
+            _ensure_schema(db)
 
-        # Integrity check — runs after WAL/FK pragmas are applied by the connect event.
-        result = db.execute(text("PRAGMA integrity_check")).scalar()
-        if result != "ok":
-            logger.error("SQLite integrity_check returned: %s", result)
+        if db.get_bind().dialect.name == "sqlite":
+            result = db.execute(text("PRAGMA integrity_check")).scalar()
+            if result != "ok":
+                logger.error("SQLite integrity_check returned: %s", result)
+            else:
+                logger.info("Database integrity OK.")
         else:
-            logger.info("Database integrity OK.")
+            db.execute(text("SELECT 1"))
+            logger.info("PostgreSQL connectivity OK.")
 
         if db.query(User).count() == 0:
-            # Blank password on purpose: first login is username "admin" with
-            # the password left empty; the UI then forces setting a real one.
-            admin = User(
-                username="admin",
-                full_name="System Administrator",
-                email="admin@gov.local",
-                hashed_password=hash_password(""),
-                role=UserRole.admin,
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Seeded default admin user (username='admin', blank password).")
+            if settings.ENVIRONMENT.lower() in {"production", "prod"}:
+                if not settings.INITIAL_ADMIN_PASSWORD:
+                    logger.error(
+                        "No users exist. Set INITIAL_ADMIN_PASSWORD before first login."
+                    )
+                else:
+                    admin = User(
+                        username=settings.INITIAL_ADMIN_USERNAME,
+                        full_name=settings.INITIAL_ADMIN_FULL_NAME,
+                        email=settings.INITIAL_ADMIN_EMAIL,
+                        hashed_password=hash_password(settings.INITIAL_ADMIN_PASSWORD),
+                        role=UserRole.admin,
+                    )
+                    db.add(admin)
+                    db.commit()
+                    logger.info("Seeded the configured initial administrator.")
+            else:
+                admin = User(
+                    username="admin",
+                    full_name="System Administrator",
+                    email="admin@gov.local",
+                    hashed_password=hash_password(""),
+                    role=UserRole.admin,
+                )
+                db.add(admin)
+                db.commit()
+                logger.info("Seeded local development administrator.")
     finally:
         db.close()
 
@@ -154,6 +182,12 @@ def on_startup() -> None:
 def health() -> dict:
     """Liveness/health probe."""
     return {"status": "ok", "app": settings.APP_NAME}
+
+
+@app.get("/api/health")
+def api_health() -> dict:
+    """Health probe under the Vercel function's /api path."""
+    return health()
 
 
 @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)

@@ -16,6 +16,7 @@ from app.schemas.item import (
     PaginatedItems,
 )
 from app.schemas.transaction import PaginatedTransactions, TransactionOut
+from app.services.numbering import next_item_code
 from app.utils.security import get_current_user, require_role
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -102,7 +103,7 @@ def create_item(
     db: Session = Depends(get_db),
 ) -> Item:
     """Create an item; its code is auto-generated as ITM-XXXX."""
-    item = Item(**payload.model_dump())
+    item = Item(code=next_item_code(db), **payload.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)

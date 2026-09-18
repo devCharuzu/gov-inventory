@@ -2,18 +2,9 @@
 
 import uuid
 
-from sqlalchemy import (
-    Boolean,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    event,
-    func,
-    select,
-)
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base, TimestampMixin
 
@@ -47,23 +38,3 @@ class Item(Base, TimestampMixin):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Item {self.code} {self.name}>"
-
-
-@event.listens_for(Session, "before_flush")
-def _generate_item_codes(session: Session, flush_context, instances) -> None:
-    """Auto-assign sequential codes like ``ITM-0001`` to new items.
-
-    Runs once per flush so a batch of inserts each receives a distinct,
-    contiguous code starting from the current maximum in the table.
-    """
-    new_items = [
-        obj
-        for obj in session.new
-        if isinstance(obj, Item) and not obj.code
-    ]
-    if not new_items:
-        return
-    max_code = session.execute(select(func.max(Item.code))).scalar()
-    base = int(max_code.split("-")[1]) if max_code else 0
-    for offset, item in enumerate(new_items, start=1):
-        item.code = f"ITM-{base + offset:04d}"

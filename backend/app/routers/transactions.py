@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,6 +23,7 @@ from app.schemas.transaction import (
     TransactionOut,
 )
 from app.services.report_files import save_transaction_report
+from app.services.numbering import next_number
 from app.utils.security import get_current_user, require_role
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -64,18 +64,17 @@ def _next_reference(db: Session, txn_type: TransactionType) -> str:
     """
     prefix = _REF_PREFIX[txn_type]
     year = datetime.now(timezone.utc).year
-    like = f"{prefix}-{year}-%"
-    max_ref = (
-        db.query(func.max(Transaction.reference_number))
-        .filter(Transaction.reference_number.like(like))
-        .scalar()
-    )
-    seq = int(max_ref.rsplit("-", 1)[1]) + 1 if max_ref else 1
+    seq = next_number(db, f"transaction:{prefix}:{year}")
     return f"{prefix}-{year}-{seq:04d}"
 
 
-def _get_item_or_404(db: Session, item_id: uuid.UUID) -> Item:
-    item = db.query(Item).filter(Item.id == item_id).first()
+def _get_item_or_404(
+    db: Session, item_id: uuid.UUID, *, lock: bool = False
+) -> Item:
+    query = db.query(Item).filter(Item.id == item_id)
+    if lock:
+        query = query.with_for_update()
+    item = query.first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Item not found"
@@ -136,7 +135,7 @@ def stock_in(
     db: Session = Depends(get_db),
 ) -> Transaction:
     """Record a stock-in transaction and increase item quantity."""
-    item = _get_item_or_404(db, payload.item_id)
+    item = _get_item_or_404(db, payload.item_id, lock=True)
 
     txn = Transaction(
         transaction_type=TransactionType.IN,
@@ -180,7 +179,7 @@ def stock_out(
     db: Session = Depends(get_db),
 ) -> Transaction:
     """Record a stock-out transaction and decrease item quantity."""
-    item = _get_item_or_404(db, payload.item_id)
+    item = _get_item_or_404(db, payload.item_id, lock=True)
 
     if item.quantity < payload.quantity:
         raise HTTPException(
@@ -273,7 +272,7 @@ def bulk_delete_transactions(
                     item.quantity += txn.quantity
                 db.add(item)
         # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
-        report_files.delete_report(report_files._safe_name(txn.reference_number))
+        report_files.delete_report(db, report_files._safe_name(txn.reference_number))
         db.delete(txn)
         count += 1
     db.commit()
@@ -361,7 +360,7 @@ def hard_delete_transaction(
     # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
     from app.services import report_files
 
-    report_files.delete_report(report_files._safe_name(ref))
+    report_files.delete_report(db, report_files._safe_name(ref))
     db.delete(txn)
     db.commit()
     _audit(db, user=current_user, action="DELETE_TRANSACTION", request=request,

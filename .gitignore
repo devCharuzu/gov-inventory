@@ -27,6 +27,8 @@ backend/gov_inventory.db-*
 # Generated report files and local build output
 backend/generated_reports/*
 backend/static/
+*.admin-credentials
+admin-credentials*
 frontend/dist/
 frontend/node_modules/
 node_modules/

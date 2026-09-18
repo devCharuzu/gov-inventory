@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -325,27 +325,29 @@ def analytics_report(
 
 @router.get("/files", response_model=list[StoredReport])
 def list_stored_reports(
+    db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[StoredReport]:
     """List persisted transaction report PDFs (newest first)."""
-    return [StoredReport(**r) for r in report_files.list_reports()]
+    return [StoredReport(**r) for r in report_files.list_reports(db)]
 
 
 @router.get("/files/{name}")
 def get_stored_report(
     name: str,
+    db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
-) -> FileResponse:
+) -> Response:
     """Download a previously stored transaction report PDF."""
-    path = report_files.report_path(name)
-    if path is None:
+    report = report_files.get_report(db, name)
+    if report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
         )
-    return FileResponse(
-        path,
+    return Response(
+        content=report.content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{path.name}"'},
+        headers={"Content-Disposition": f'inline; filename="{report.name}"'},
     )
 
 
@@ -356,20 +358,22 @@ class DeleteReportsRequest(BaseModel):
 @router.delete("/files", response_model=dict)
 def delete_stored_reports(
     body: DeleteReportsRequest,
+    db: Session = Depends(get_db),
     _: User = Depends(require_role(UserRole.admin, UserRole.encoder)),
 ) -> dict:
     """Delete one or more stored report files by name."""
-    count = report_files.delete_reports(body.names)
+    count = report_files.delete_reports(db, body.names)
     return {"deleted": count}
 
 
 @router.delete("/files/{name}", response_model=dict)
 def delete_stored_report(
     name: str,
+    db: Session = Depends(get_db),
     _: User = Depends(require_role(UserRole.admin, UserRole.encoder)),
 ) -> dict:
     """Delete a single stored report file."""
-    if not report_files.delete_report(name):
+    if not report_files.delete_report(db, name):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
         )

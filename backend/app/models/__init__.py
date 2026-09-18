@@ -41,6 +41,8 @@ from app.models.transaction import Transaction, TransactionType  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.signatory import Signatory  # noqa: E402
 from app.models.app_settings import AppSetting  # noqa: E402
+from app.models.number_counter import NumberCounter  # noqa: E402
+from app.models.report_document import ReportDocument  # noqa: E402
 
 __all__ = [
     "Base",
@@ -55,4 +57,6 @@ __all__ = [
     "AuditLog",
     "Signatory",
     "AppSetting",
+    "NumberCounter",
+    "ReportDocument",
 ]

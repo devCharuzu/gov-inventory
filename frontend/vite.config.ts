@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+const isVercelBuild = Boolean(process.env.VERCEL);
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,7 +13,9 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "../backend/static"),
+    // Local FastAPI serves the compiled SPA from backend/static. Vercel
+    // deploys the frontend project itself and expects its output in dist.
+    outDir: isVercelBuild ? "dist" : path.resolve(__dirname, "../backend/static"),
     emptyOutDir: true,
   },
   server: {

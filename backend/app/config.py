@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     AUTO_CREATE_SCHEMA: bool = True
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
-    INITIAL_ADMIN_USERNAME: str = "admin"
-    INITIAL_ADMIN_FULL_NAME: str = "System Administrator"
-    INITIAL_ADMIN_EMAIL: str = "admin@gov.local"
+    INITIAL_ADMIN_USERNAME: str = "admin_r13"
+    INITIAL_ADMIN_FULL_NAME: str = "Regional Office XIII Administrator"
+    INITIAL_ADMIN_EMAIL: str = "admin_r13@philfida.local"
     INITIAL_ADMIN_PASSWORD: str = ""
     SUPABASE_URL: str = ""
     SUPABASE_SECRET_KEY: str = ""

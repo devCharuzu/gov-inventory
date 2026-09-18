@@ -1,6 +1,7 @@
 """Exercise a deployment with temporary records; secrets stay in backend/.env."""
 
 import json
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -15,7 +16,13 @@ from sqlalchemy import create_engine, text
 
 config = dotenv_values(ROOT / "backend/.env")
 base = sys.argv[1].rstrip("/")
+regional_password = os.environ.get("REGIONAL_DEFAULT_PASSWORD") or config.get(
+    "REGIONAL_DEFAULT_PASSWORD"
+)
+if not regional_password:
+    raise RuntimeError("Set REGIONAL_DEFAULT_PASSWORD for regional smoke tests")
 token = None
+r13_region_id = None
 category_id = None
 item_id = None
 transaction_ids = []
@@ -49,11 +56,21 @@ try:
     assert health["database"] == "connected"
     call("/api/items/", expected=401)
     login = call("/api/auth/login", "POST", {
-        "username": config["INITIAL_ADMIN_USERNAME"],
-        "password": config["INITIAL_ADMIN_PASSWORD"],
+        "username": "admin_r13",
+        "password": regional_password,
     }, form=True)
     token = login["access_token"]
-    print("PASS health, database connectivity, authentication")
+    r13_token = token
+    assert login["user"]["region_name"] == "Regional Office XIII"
+    r13_region_id = login["user"]["region_id"]
+    r1_login = call("/api/auth/login", "POST", {
+        "username": "admin_r1",
+        "password": regional_password,
+    }, form=True)
+    token = r1_login["access_token"]
+    assert call("/api/categories/") == []
+    token = r13_token
+    print("PASS health, database connectivity, regional authentication/isolation")
     category = call("/api/categories/", "POST", {"name": "Deployment verification " + uuid.uuid4().hex}, expected=201)
     category_id = category["id"]
     item = call("/api/items/", "POST", {"name": "Temporary deployment verification", "category_id": category_id, "quantity": 0, "unit": "piece"}, expected=201)
@@ -78,6 +95,13 @@ finally:
     if category_id:
         engine = create_engine(config["DATABASE_URL"], connect_args={"prepare_threshold": None})
         with engine.begin() as connection:
+            # The runtime role is protected by region-scoped RLS, including
+            # direct cleanup statements. Scope this verification cleanup to
+            # the temporary Regional Office XIII records only.
+            connection.execute(
+                text("select set_config('app.region_id', :region_id, false)"),
+                {"region_id": r13_region_id},
+            )
             for reference in references:
                 connection.execute(text("DELETE FROM report_documents WHERE name=:name"), {"name": reference + ".pdf"})
             for entity_id in transaction_ids + ([item_id] if item_id else []) + [category_id]:

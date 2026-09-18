@@ -1115,95 +1115,20 @@ function SignatoriesTab() {
     }
   }
 
-  const REGIONS = [
-    "Regional Office I",
-    "Regional Office IV",
-    "Regional Office V",
-    "Regional Office VI",
-    "Regional Office VII",
-    "Regional Office VIII",
-    "Regional Office IX",
-    "Regional Office X",
-    "Regional Office XI",
-    "Regional Office XIII",
-  ];
-
-  // Local draft for region (not saved until user confirms)
-  const [regionDraft, setRegionDraft] = useState<string>("");
-  const [confirmRegion, setConfirmRegion] = useState(false);
-
-  // Sync draft when settings load
-  useEffect(() => {
-    setRegionDraft(settings.region ?? "");
-  }, [settings.region]);
-
-  async function commitRegion() {
-    setSaving(true);
-    try {
-      const updated = await signatoriesService.updateSettings({
-        region: regionDraft || null,
-      });
-      setSettings(updated);
-      toast.success("Region saved — all new documents will use this header.");
-    } catch {
-      toast.error("Failed to save region");
-    } finally {
-      setSaving(false);
-      setConfirmRegion(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
-      {/* Region card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Regional Office</CardTitle>
           <CardDescription>
-            The selected region appears in the header of all printed documents.
-            Changes only take effect after saving.
+            Your account is permanently assigned to this region. Inventory,
+            users, settings, reports, and PDF headers are isolated to it.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex items-end gap-3">
-          <div className="w-56">
-            <Select
-              value={regionDraft}
-              onValueChange={(v) => setRegionDraft(v ?? "")}
-              disabled={saving || loading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select region…" />
-              </SelectTrigger>
-              <SelectContent>
-                {REGIONS.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            disabled={saving || loading || regionDraft === (settings.region ?? "")}
-            onClick={() => setConfirmRegion(true)}
-          >
-            Save Region
-          </Button>
+        <CardContent className="text-sm font-medium">
+          {settings.region ?? "Assigned regional office"}
         </CardContent>
       </Card>
-
-      <ConfirmDialog
-        open={confirmRegion}
-        onOpenChange={(o) => !o && setConfirmRegion(false)}
-        title="Change document header?"
-        description={
-          regionDraft
-            ? `All new documents will show "${regionDraft}" in the header. Previously printed documents are not affected.`
-            : "The region will be cleared from all new documents."
-        }
-        confirmLabel="Save"
-        onConfirm={commitRegion}
-      />
 
       {/* Selection card */}
       <Card>

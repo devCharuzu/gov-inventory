@@ -7,10 +7,10 @@ from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
-from app.models import Base, CreatedAtMixin
+from app.models import Base, CreatedAtMixin, RegionScopedMixin
 
 
-class AuditLog(Base, CreatedAtMixin):
+class AuditLog(Base, RegionScopedMixin, CreatedAtMixin):
     """Immutable record of a user action for auditing."""
 
     __tablename__ = "audit_logs"

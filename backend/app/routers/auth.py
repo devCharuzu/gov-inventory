@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import clear_region_context, get_db, set_region_context
 from app.models import AuditLog, Transaction, User, UserRole
 from app.schemas.user import (
     ChangePassword,
@@ -73,6 +73,7 @@ def _to_out(db: Session, user: User, main_admin_id: uuid.UUID | None = None) -> 
         main_admin_id = _main_admin_id(db)
     out = UserOut.model_validate(user)
     out.is_main_admin = user.id == main_admin_id
+    out.region_name = user.region.name if user.region else None
     return out
 
 
@@ -90,6 +91,7 @@ def login(
     db: Session = Depends(get_db),
 ) -> Token:
     """Authenticate with username/password and return a JWT."""
+    clear_region_context(db)
     user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
@@ -101,11 +103,12 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
+    set_region_context(db, user.region_id)
 
     token = create_access_token({"sub": user.username})
     _audit(db, user=user, action="LOGIN", request=request)
     out = _to_out(db, user)
-    out.must_change_password = _uses_default_password(user)
+    out.must_change_password = user.must_change_password
     return Token(access_token=token, user=out)
 
 
@@ -121,10 +124,8 @@ def logout(
 
 
 def _uses_default_password(user: User) -> bool:
-    """True when the account still has a blank or shipped-default password."""
-    return verify_password("", user.hashed_password) or verify_password(
-        "Admin@1234", user.hashed_password
-    )
+    """Return whether the account must replace its issued password."""
+    return user.must_change_password
 
 
 @router.get("/me", response_model=UserOut)
@@ -134,7 +135,7 @@ def read_me(
 ) -> UserOut:
     """Return the currently authenticated user."""
     out = _to_out(db, current_user)
-    out.must_change_password = _uses_default_password(current_user)
+    out.must_change_password = current_user.must_change_password
     return out
 
 
@@ -186,6 +187,7 @@ def change_password(
             detail="Incorrect current password",
         )
     current_user.hashed_password = hash_password(payload.new_password)
+    current_user.must_change_password = False
     db.add(current_user)
     db.commit()
     _audit(

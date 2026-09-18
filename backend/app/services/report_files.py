@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     AppSetting,
     Item,
+    Region,
     ReportDocument,
     Signatory,
     Transaction,
@@ -36,9 +37,9 @@ def _get_signatory(db: Session, key: str) -> "Signatory | None":
     ).first()
 
 
-def _get_region(db: Session) -> str:
-    row = db.query(AppSetting).filter(AppSetting.key == "region").first()
-    return row.value if row and row.value else "Regional Office XIII"
+def _get_region(db: Session, region_id) -> str:
+    region = db.query(Region).filter(Region.id == region_id).first()
+    return region.name if region else "Regional Office XIII"
 
 
 def _safe_name(reference_number: str) -> str:
@@ -50,7 +51,7 @@ def build_transaction_pdf(db: Session, txn: Transaction) -> bytes:
     """Render the official slip PDF for a transaction."""
     item = db.query(Item).filter(Item.id == txn.item_id).first()
     fmt_date = txn.transaction_date.strftime("%B %d, %Y")
-    region = _get_region(db)
+    region = _get_region(db, txn.region_id)
 
     if txn.transaction_type == TransactionType.OUT:
         return render_template_to_pdf(
@@ -81,7 +82,7 @@ def save_transaction_report(db: Session, txn: Transaction) -> str | None:
     try:
         pdf = build_transaction_pdf(db, txn)
         name = _safe_name(txn.reference_number)
-        existing = db.get(ReportDocument, name)
+        existing = db.get(ReportDocument, (db.info["region_id"], name))
         if existing:
             existing.content = pdf
             existing.size = len(pdf)
@@ -122,7 +123,7 @@ def list_reports(db: Session) -> list[dict]:
 
 def get_report(db: Session, name: str) -> ReportDocument | None:
     """Fetch a report by safe filename."""
-    return db.get(ReportDocument, name)
+    return db.get(ReportDocument, (db.info["region_id"], name))
 
 
 def delete_report(db: Session, name: str) -> bool:

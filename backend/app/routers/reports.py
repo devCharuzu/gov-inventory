@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AppSetting, Item, Signatory, Transaction, TransactionType, User, UserRole
+from app.models import AppSetting, Item, Region, Signatory, Transaction, TransactionType, User, UserRole
 from app.routers.analytics import summary as analytics_summary
 from app.routers.analytics import top_items as analytics_top_items
 from app.routers.analytics import trends as analytics_trends
@@ -66,9 +66,11 @@ def _get_signatory(db: Session, key: str) -> Signatory | None:
     return db.query(Signatory).filter(Signatory.id == sid, Signatory.is_active == True).first()  # noqa: E712
 
 
-def _get_region(db: Session) -> str:
-    row = db.query(AppSetting).filter(AppSetting.key == "region").first()
-    return row.value if (row and row.value) else "Regional Office XIII"
+def _get_region(db: Session, region_id: uuid.UUID | None = None) -> str:
+    if region_id is None:
+        region_id = db.info.get("region_id")
+    region = db.query(Region).filter(Region.id == region_id).first()
+    return region.name if region else "Regional Office XIII"
 
 
 @router.get("/request-form/{transaction_id}")
@@ -94,7 +96,7 @@ def request_form(
     item = db.query(Item).filter(Item.id == txn.item_id).first()
     certifier = _get_signatory(db, "certifier_id")
     issuer = _get_signatory(db, "issuer_id")
-    region = _get_region(db)
+    region = _get_region(db, txn.region_id)
 
     pdf = render_template_to_pdf(
         "request_form.html",
@@ -132,7 +134,7 @@ def received_form(
         )
     item = db.query(Item).filter(Item.id == txn.item_id).first()
 
-    region = _get_region(db)
+    region = _get_region(db, txn.region_id)
     pdf = render_template_to_pdf(
         "received_form.html",
         {

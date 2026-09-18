@@ -18,7 +18,7 @@ import { useAuth } from "@/store/AuthContext";
 
 /**
  * Shown automatically after login while the account still uses the
- * blank/default password. Dismissible ("Later"), but reappears on every
+ * temporary issued password. Dismissible ("Later"), but reappears on every
  * login until a real password is set.
  */
 export default function SetPasswordDialog() {
@@ -66,8 +66,8 @@ export default function SetPasswordDialog() {
             Set your password now
           </DialogTitle>
           <DialogDescription>
-            This account has no password yet (or is still using the default).
-            Anyone could sign in as you — please set a password immediately.
+            This account is still using the temporary password issued by the
+            developer. Please set a private password immediately.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -78,7 +78,7 @@ export default function SetPasswordDialog() {
               type="password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
-              placeholder="Leave blank if you haven't set one"
+              placeholder="Enter the temporary password"
               disabled={saving}
             />
           </div>

@@ -48,6 +48,8 @@ class UserOut(UserBase):
     email: str
 
     id: uuid.UUID
+    region_id: uuid.UUID
+    region_name: str | None = None
     position: str | None = None
     is_active: bool
     created_at: datetime

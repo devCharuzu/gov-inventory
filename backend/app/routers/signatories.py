@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AppSetting, Signatory, User
+from app.models import AppSetting, Signatory, User, UserRole
 from app.schemas.signatory import (
     AppSettingsOut,
     AppSettingsUpdate,
@@ -18,7 +18,7 @@ from app.utils.security import get_current_user, require_role
 
 router = APIRouter(prefix="/signatories", tags=["signatories"])
 
-_admin = require_role("admin")
+_admin = require_role(UserRole.admin)
 
 CERTIFIER_KEY = "certifier_id"
 ISSUER_KEY = "issuer_id"
@@ -46,11 +46,11 @@ def _set_setting(db: Session, key: str, value: str | None) -> None:
 @router.get("/settings", response_model=AppSettingsOut)
 def get_signatory_settings(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AppSettingsOut:
     cert = _get_setting(db, CERTIFIER_KEY)
     iss = _get_setting(db, ISSUER_KEY)
-    region = _get_setting(db, REGION_KEY)
+    region = current_user.region.name if current_user.region else _get_setting(db, REGION_KEY)
     return AppSettingsOut(
         certifier_id=uuid.UUID(cert) if cert else None,
         issuer_id=uuid.UUID(iss) if iss else None,
@@ -62,21 +62,21 @@ def get_signatory_settings(
 def update_signatory_settings(
     payload: AppSettingsUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(_admin),
+    current_user: User = Depends(_admin),
 ) -> AppSettingsOut:
     if "certifier_id" in payload.model_fields_set:
         _set_setting(db, CERTIFIER_KEY, str(payload.certifier_id) if payload.certifier_id else None)
     if "issuer_id" in payload.model_fields_set:
         _set_setting(db, ISSUER_KEY, str(payload.issuer_id) if payload.issuer_id else None)
-    if "region" in payload.model_fields_set:
-        _set_setting(db, REGION_KEY, payload.region)
+    # The PDF header is tied to the authenticated account's region and cannot
+    # be changed by an admin into another office's identity.
 
     # Rebuild stored transaction slips so the archive reflects the new
     # header/signatories instead of whatever was in effect at creation time.
     from app.services import report_files
     report_files.regenerate_all_reports(db)
 
-    return get_signatory_settings(db)
+    return get_signatory_settings(db=db, current_user=current_user)
 
 
 # ── signatories CRUD ─────────────────────────────────────────────────────────
@@ -143,5 +143,3 @@ def delete_signatory(
         if _get_setting(db, key) == str(signatory_id):
             _set_setting(db, key, None)
     db.commit()
-
-

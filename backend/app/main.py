@@ -12,7 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.database import SessionLocal, engine, get_db
-from app.models import Base, User, UserRole
+from app.models import Base, Region, User, UserRole
 from app.routers import (
     analytics,
     audit,
@@ -167,7 +167,15 @@ def on_startup() -> None:
                         "No users exist. Set INITIAL_ADMIN_PASSWORD before first login."
                     )
                 else:
+                    region = Region(
+                        code="r13",
+                        name="Regional Office XIII",
+                        admin_username=settings.INITIAL_ADMIN_USERNAME,
+                    )
+                    db.add(region)
+                    db.flush()
                     admin = User(
+                        region_id=region.id,
                         username=settings.INITIAL_ADMIN_USERNAME,
                         full_name=settings.INITIAL_ADMIN_FULL_NAME,
                         email=settings.INITIAL_ADMIN_EMAIL,
@@ -178,8 +186,16 @@ def on_startup() -> None:
                     db.commit()
                     logger.info("Seeded the configured initial administrator.")
             else:
+                region = Region(
+                    code="r13",
+                    name="Regional Office XIII",
+                    admin_username="admin_r13",
+                )
+                db.add(region)
+                db.flush()
                 admin = User(
-                    username="admin",
+                    region_id=region.id,
+                    username="admin_r13",
                     full_name="System Administrator",
                     email="admin@gov.local",
                     hashed_password=hash_password(""),

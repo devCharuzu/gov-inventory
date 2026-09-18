@@ -1,6 +1,6 @@
 # PhilFIDA Inventory System
 
-Inventory and asset management for PhilFIDA Regional Office XIII. The production architecture is intentionally small: a Vite/React frontend, a FastAPI serverless API on Vercel, and Supabase Postgres for persistent data.
+Inventory and asset management for PhilFIDA regional offices. The production architecture is intentionally small: a Vite/React frontend, a FastAPI serverless API on Vercel, and Supabase Postgres for persistent data.
 
 ## Architecture
 
@@ -10,6 +10,9 @@ Inventory and asset management for PhilFIDA Regional Office XIII. The production
 - `supabase/migrations/` — versioned production database schema.
 - Local development defaults to `backend/gov_inventory.db` (SQLite).
 - Production stores report PDFs in Supabase instead of the Vercel filesystem, which is ephemeral.
+- Each issued regional administrator account has its own isolated inventory, settings,
+  signatories, audit history, counters, and report archive. PDF headers are derived
+  from the signed-in account's region and cannot be changed to another region.
 
 ## Run locally
 
@@ -42,21 +45,21 @@ Required production settings:
 - `ENVIRONMENT=production`.
 - `AUTO_CREATE_SCHEMA=false` — the schema is deployed by the migration, not by a cold start.
 - `CORS_ORIGINS` — the Vercel production URL, and any explicitly approved preview URL.
-- `INITIAL_ADMIN_PASSWORD` — one strong, temporary password used only to create the first administrator when the database has no users.
+- `INITIAL_ADMIN_PASSWORD` — optional fallback for a local empty database; production accounts are seeded by the regional migration.
 
 Do not put database credentials, `SECRET_KEY`, an `sb_secret_` key, or any other server-only secret in a `VITE_` variable. Vite variables are bundled into browser JavaScript. The real `.env` files are ignored by Git and must never be committed. If a secret was shared in chat or another insecure place, rotate it before production.
 
 ## Supabase database
 
-The migration at `supabase/migrations/0001_inventory_schema.sql` has been applied to the project database. It creates the inventory tables, number counters, report storage, indexes, foreign keys, and deny-by-default RLS policies. The production API connects with the Postgres pooler; the browser does not connect directly to Supabase.
+The migration at `supabase/migrations/20260918071957_regional_multi_tenant_reset.sql` creates the regional inventory tables, number counters, report storage, indexes, foreign keys, and deny-by-default RLS policies. It seeds the ten regional administrator usernames supplied for this deployment. The production API connects with the Postgres pooler; the browser does not connect directly to Supabase.
 
-The new cloud database starts empty. Keep the local SQLite database and generated reports until the existing records have been intentionally imported and verified. Do not delete them as part of a deployment cleanup.
+The requested reset removed the previous cloud inventory rows and login accounts. Local SQLite data, if present, is separate and is not uploaded automatically.
 
 The configured runtime connection uses the dedicated `inventory_app` role, not
-the database owner. Its migration grants CRUD access only to the nine inventory
-tables through role-specific RLS policies. API publishable/secret keys are not
-needed by this architecture. Keep the generated runtime URL in the ignored
-`backend/.env` and Vercel's sensitive production environment variables.
+the database owner. The migration grants access through role-specific RLS
+policies that require the authenticated region context. API publishable/secret
+keys are not needed by this architecture. Keep the generated runtime URL in the
+ignored `backend/.env` and Vercel's sensitive production environment variables.
 
 To verify a deployment with temporary records, run
 `backend/venv/bin/python scripts/verify_deployment.py https://gov-inventory.vercel.app`.
@@ -78,4 +81,8 @@ The expected response is a JSON object with `status: "ok"` and the configured en
 
 ## Administrator handover
 
-The administrator only needs the Vercel URL, their username, and their password. Keep deployment credentials, Supabase credentials, and the initial one-time password in the organization’s password manager. After the first login, change the initial password and remove `INITIAL_ADMIN_PASSWORD` from Vercel if it is no longer needed.
+The administrator only needs the Vercel URL, their issued regional username, and
+the temporary password provided separately by the developer. The first login
+shows a password-change prompt. Keep deployment credentials, Supabase
+credentials, and the temporary account password in the organization’s password
+manager; never commit them to this repository.

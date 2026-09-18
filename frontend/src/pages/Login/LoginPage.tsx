@@ -151,9 +151,8 @@ export default function LoginPage() {
           </Form>
 
           <p className="mt-4 rounded-md bg-accent p-3 text-center text-xs text-accent-foreground">
-            First time here? Sign in with username{" "}
-            <span className="font-mono font-semibold">admin</span> and leave
-            the password blank — you'll be asked to set one right after.
+            Sign in using the regional account issued to your office. You will
+            be asked to replace the temporary password after signing in.
           </p>
         </CardContent>
       </Card>

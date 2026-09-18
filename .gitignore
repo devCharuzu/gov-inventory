@@ -44,4 +44,5 @@ node_modules/
 
 # Vercel local project metadata
 .vercel/
+supabase/.temp/
 scripts/__pycache__/

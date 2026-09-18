@@ -133,6 +133,9 @@ export default function Sidebar() {
           {!collapsed && user && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{user.full_name}</p>
+              <p className="truncate text-[10px] text-muted-foreground">
+                {user.region_name}
+              </p>
               <Badge variant="secondary" className="mt-0.5 h-4 px-1.5 text-[10px] uppercase">
                 {user.role}
               </Badge>

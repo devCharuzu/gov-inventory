@@ -17,11 +17,14 @@ def next_number(db: Session, key: str, *, initial: int = 1) -> int:
     if dialect == "postgresql":
         from sqlalchemy.dialects.postgresql import insert
 
+        region_id = db.info.get("region_id")
+        if region_id is None:
+            raise RuntimeError("A regional context is required for numbering")
         statement = (
             insert(NumberCounter)
-            .values(key=key, next_value=initial + 1)
+            .values(region_id=region_id, key=key, next_value=initial + 1)
             .on_conflict_do_update(
-                index_elements=[NumberCounter.key],
+                index_elements=[NumberCounter.region_id, NumberCounter.key],
                 set_={"next_value": NumberCounter.next_value + 1},
             )
             .returning(NumberCounter.next_value)

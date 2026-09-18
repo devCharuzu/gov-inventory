@@ -2,6 +2,8 @@ export type UserRole = "admin" | "encoder" | "viewer";
 
 export interface User {
   id: string;
+  region_id: string;
+  region_name: string | null;
   username: string;
   full_name: string;
   position: string | null;

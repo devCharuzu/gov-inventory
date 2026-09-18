@@ -5,8 +5,10 @@ all model classes for convenient importing (e.g. ``from app.models import Item``
 """
 
 from datetime import datetime
+import uuid
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -33,7 +35,19 @@ class TimestampMixin(CreatedAtMixin):
     )
 
 
+class RegionScopedMixin:
+    """Adds the tenant/region key shared by all regional records."""
+
+    region_id: Mapped[uuid.UUID] = mapped_column(
+        SAUuid,
+        ForeignKey("regions.id"),
+        nullable=False,
+        index=True,
+    )
+
+
 # Import models after Base/mixins are defined so they can reference them.
+from app.models.region import Region  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.models.category import Category  # noqa: E402
 from app.models.item import Item  # noqa: E402
@@ -48,6 +62,8 @@ __all__ = [
     "Base",
     "CreatedAtMixin",
     "TimestampMixin",
+    "RegionScopedMixin",
+    "Region",
     "User",
     "UserRole",
     "Category",

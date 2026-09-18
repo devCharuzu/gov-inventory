@@ -78,6 +78,9 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    from app.database import clear_region_context, set_region_context
+
+    clear_region_context(db)
     payload = decode_token(token)
     username = payload.get("sub")
     if username is None:
@@ -90,6 +93,7 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
+    set_region_context(db, user.region_id)
     return user
 
 

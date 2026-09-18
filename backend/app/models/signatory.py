@@ -3,10 +3,10 @@ import uuid
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models import Base, TimestampMixin
+from app.models import Base, RegionScopedMixin, TimestampMixin
 
 
-class Signatory(Base, TimestampMixin):
+class Signatory(Base, RegionScopedMixin, TimestampMixin):
     """An employee: name, position, and unit.
 
     Used both as a selectable recipient when releasing items and as the

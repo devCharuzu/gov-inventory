@@ -12,12 +12,13 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models import Base, TimestampMixin
+from app.models import Base, RegionScopedMixin, TimestampMixin
 
 
 class TransactionType(str, enum.Enum):
@@ -27,7 +28,7 @@ class TransactionType(str, enum.Enum):
     OUT = "OUT"
 
 
-class Transaction(Base, TimestampMixin):
+class Transaction(Base, RegionScopedMixin, TimestampMixin):
     """A stock-in or stock-out movement against an item."""
 
     __tablename__ = "transactions"
@@ -38,9 +39,7 @@ class Transaction(Base, TimestampMixin):
     transaction_type: Mapped[TransactionType] = mapped_column(
         Enum(TransactionType), nullable=False
     )
-    reference_number: Mapped[str] = mapped_column(
-        String(50), unique=True, index=True
-    )
+    reference_number: Mapped[str] = mapped_column(String(50), index=True)
     item_id: Mapped[uuid.UUID] = mapped_column(
         SAUuid, ForeignKey("items.id"), nullable=False
     )
@@ -60,6 +59,14 @@ class Transaction(Base, TimestampMixin):
     )
     voided: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "region_id",
+            "reference_number",
+            name="uq_transactions_region_reference",
+        ),
     )
 
     # Relationships

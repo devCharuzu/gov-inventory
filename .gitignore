@@ -4,6 +4,11 @@
 !.env.example
 !.env.sample
 !.env.template
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.sample
+!backend/.env.template
 
 # Python environments, caches, and local tooling
 backend/venv/

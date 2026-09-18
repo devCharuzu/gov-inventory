@@ -42,3 +42,17 @@ On a new database, sign in with username `admin` and leave the password blank. T
 - Runtime settings can be supplied through environment variables or `backend/.env`.
 
 The API is available under `/api`, health is available at `/health`, and interactive API documentation is available at `/docs`.
+
+## Supabase and secret configuration
+
+Production uses a separate Supabase Postgres project. The local SQLite database is retained only as the migration source until the cloud database has been verified.
+
+For local configuration:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Fill in `backend/.env` with the Supabase **Transaction pooler** connection string from Dashboard → Connect and a newly generated `SECRET_KEY`. The real `.env` file is ignored by Git and must never be committed.
+
+For Vercel, add the same values in the project Environment Variables settings and scope them to the appropriate environment. Do not use `VITE_` or `NEXT_PUBLIC_` prefixes for database credentials or signing secrets; client-prefixed variables are exposed to the browser. Never place a Supabase service-role/secret key in frontend code.

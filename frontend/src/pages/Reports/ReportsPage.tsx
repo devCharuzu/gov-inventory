@@ -181,6 +181,7 @@ export default function ReportsPage() {
   const [inTxn, setInTxn] = useState<Transaction | null>(null);
   const [histType, setHistType] = useState<string | undefined>(undefined);
   const [histItem, setHistItem] = useState<Item | null>(null);
+  const [histEmployee, setHistEmployee] = useState("");
   // Stored documents tab
   const [stored, setStored] = useState<StoredReport[]>([]);
   const [storedLoading, setStoredLoading] = useState(true);
@@ -233,8 +234,12 @@ export default function ReportsPage() {
 
   // Date params derived from filter
   const dateParams = {
-    start_date: dateFilter.start ? new Date(dateFilter.start).toISOString() : undefined,
-    end_date: dateFilter.end ? new Date(dateFilter.end).toISOString() : undefined,
+    start_date: dateFilter.start
+      ? new Date(`${dateFilter.start}T00:00:00`).toISOString()
+      : undefined,
+    end_date: dateFilter.end
+      ? new Date(`${dateFilter.end}T23:59:59.999`).toISOString()
+      : undefined,
   };
 
   // Stored-doc helpers
@@ -362,8 +367,8 @@ export default function ReportsPage() {
 
               {/* Transaction History */}
               <ReportCard
-                title="Transaction History"
-                description="Filtered transaction list over the selected date range."
+                title="Batch Print Transactions"
+                description="Print a filtered transaction list for a week, month, date, or employee."
               >
                 <div className="space-y-2">
                   <Label>Type</Label>
@@ -402,6 +407,14 @@ export default function ReportsPage() {
                     onSelect={setHistItem}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Employee (optional)</Label>
+                  <Input
+                    value={histEmployee}
+                    onChange={(event) => setHistEmployee(event.target.value)}
+                    placeholder="Search employee / recipient"
+                  />
+                </div>
                 {dateFilter.preset && (
                   <p className="text-xs text-muted-foreground">
                     Using date range: {dateFilter.start} → {dateFilter.end}
@@ -414,6 +427,7 @@ export default function ReportsPage() {
                         type: histType as TransactionType | undefined,
                         ...dateParams,
                         item_id: histItem?.id,
+                        recipient_name: histEmployee.trim() || undefined,
                       })
                     )
                   }
@@ -424,6 +438,7 @@ export default function ReportsPage() {
                           type: histType as TransactionType | undefined,
                           ...dateParams,
                           item_id: histItem?.id,
+                          recipient_name: histEmployee.trim() || undefined,
                         }),
                       `transaction-history-${Date.now()}.pdf`
                     )

@@ -76,13 +76,24 @@ try:
     item = call("/api/items/", "POST", {"name": "Temporary deployment verification", "category_id": category_id, "quantity": 0, "unit": "piece"}, expected=201)
     item_id = item["id"]
     for path, quantity in [("in", 20), ("out", 5)]:
-        txn = call("/api/transactions/" + path, "POST", {"item_id": item_id, "quantity": quantity}, expected=201)
+        payload = {"item_id": item_id, "quantity": quantity}
+        if path == "out":
+            payload["recipient_name"] = "Verification Employee"
+        txn = call("/api/transactions/" + path, "POST", payload, expected=201)
         transaction_ids.append(txn["id"])
         references.append(txn["reference_number"])
     assert call("/api/items/" + item_id)["quantity"] == 15
     call("/api/transactions/out", "POST", {"item_id": item_id, "quantity": 100}, expected=400)
+    employee_rows = call(
+        "/api/transactions/?recipient_name=Verification%20Employee&size=100"
+    )
+    assert employee_rows["total"] == 1
     print("PASS item creation, stock-in/out, insufficient-stock rejection")
     call("/api/analytics/summary")
+    batch_pdf = call(
+        "/api/reports/transaction-history?recipient_name=Verification%20Employee"
+    )
+    assert batch_pdf.startswith(b"%PDF")
     reports = call("/api/reports/files")
     for reference in references:
         name = reference + ".pdf"

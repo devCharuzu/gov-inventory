@@ -4,10 +4,10 @@ import {
   Ban,
   ChevronLeft,
   ChevronRight,
-  Download,
   Eye,
   Inbox,
   Plus,
+  Printer,
   Trash2,
   X,
 } from "lucide-react";
@@ -88,6 +88,7 @@ export default function TransactionsPage() {
   const [endDate, setEndDate] = useState("");
   const [datePreset, setDatePreset] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -101,11 +102,14 @@ export default function TransactionsPage() {
     } else if (preset === "month") {
       setStartDate(iso(startOfMonth(now)));
       setEndDate(iso(endOfMonth(now)));
+    } else if (preset === "specific") {
+      const date = iso(now);
+      setStartDate(date);
+      setEndDate(date);
     } else if (!preset) {
       setStartDate("");
       setEndDate("");
     }
-    // "specific" keeps whatever the manual date inputs hold.
   }
 
   const [viewing, setViewing] = useState<Transaction | null>(null);
@@ -120,10 +124,15 @@ export default function TransactionsPage() {
       page,
       size: PAGE_SIZE,
       type: type as TransactionType | undefined,
-      start_date: startDate ? new Date(startDate).toISOString() : undefined,
-      end_date: endDate ? new Date(endDate).toISOString() : undefined,
+      start_date: startDate
+        ? new Date(`${startDate}T00:00:00`).toISOString()
+        : undefined,
+      end_date: endDate
+        ? new Date(`${endDate}T23:59:59.999`).toISOString()
+        : undefined,
+      recipient_name: employeeSearch.trim() || undefined,
     }),
-    [page, type, startDate, endDate]
+    [page, type, startDate, endDate, employeeSearch]
   );
 
   const fetchRows = useCallback(() => {
@@ -131,10 +140,12 @@ export default function TransactionsPage() {
     transactionsService
       .getTransactions(buildFilters())
       .then((res) => {
-        // Client-side item search (server has no item-name filter on list).
+        // Item search remains client-side; employee search is server-side so
+        // it works across every page of the transaction history.
         const filtered = search
           ? res.items.filter((t) =>
-              t.item?.name?.toLowerCase().includes(search.toLowerCase())
+              t.item?.name?.toLowerCase().includes(search.toLowerCase()) ||
+              t.item?.code?.toLowerCase().includes(search.toLowerCase())
             )
           : res.items;
         setRows(filtered);
@@ -151,7 +162,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [type, startDate, endDate]);
+  }, [type, startDate, endDate, employeeSearch]);
 
   async function handleVoid() {
     if (!toVoid) return;
@@ -226,8 +237,13 @@ export default function TransactionsPage() {
     try {
       const url = await reportsService.getTransactionHistory({
         type: type as TransactionType | undefined,
-        start_date: startDate ? new Date(startDate).toISOString() : undefined,
-        end_date: endDate ? new Date(endDate).toISOString() : undefined,
+        start_date: startDate
+          ? new Date(`${startDate}T00:00:00`).toISOString()
+          : undefined,
+        end_date: endDate
+          ? new Date(`${endDate}T23:59:59.999`).toISOString()
+          : undefined,
+        recipient_name: employeeSearch.trim() || undefined,
       });
       setPdfUrl(url);
     } catch {
@@ -245,8 +261,8 @@ export default function TransactionsPage() {
         actions={
           <div className="flex gap-2">
             <Button variant="outline" onClick={exportPdf}>
-              <Download className="mr-2 h-4 w-4" />
-              Export PDF
+              <Printer className="mr-2 h-4 w-4" />
+              Batch Print
             </Button>
             {isAdmin && selected.size > 0 && (
               <Button
@@ -317,28 +333,31 @@ export default function TransactionsPage() {
             </Button>
           )}
           {datePreset === "specific" && (
-            <>
-              <DateInput
-                value={startDate}
-                onChange={setStartDate}
-                placeholder="Start date"
-                aria-label="Start date"
-              />
-              <span className="text-sm text-muted-foreground">to</span>
-              <DateInput
-                value={endDate}
-                onChange={setEndDate}
-                placeholder="End date"
-                aria-label="End date"
-              />
-            </>
+            <DateInput
+              value={startDate}
+              onChange={(value) => {
+                setStartDate(value);
+                setEndDate(value);
+              }}
+              placeholder="Select date"
+              aria-label="Specific date"
+            />
           )}
           <Input
-            placeholder="Search item…"
+            placeholder="Search item or code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
           />
+          <Input
+            placeholder="Search employee…"
+            value={employeeSearch}
+            onChange={(e) => setEmployeeSearch(e.target.value)}
+            className="max-w-xs"
+          />
+          <p className="basis-full text-xs text-muted-foreground">
+            Batch Print uses the selected type, date range, and employee filter.
+          </p>
         </div>
 
         {/* Table */}

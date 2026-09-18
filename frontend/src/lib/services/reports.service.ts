@@ -6,6 +6,7 @@ export interface TransactionHistoryParams {
   end_date?: string;
   type?: TransactionType;
   item_id?: string;
+  recipient_name?: string;
 }
 
 export interface AnalyticsReportParams {

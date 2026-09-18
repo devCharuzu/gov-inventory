@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  HelpCircle,
   LayoutDashboard,
   LogOut,
   Package,
@@ -29,11 +30,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/items", label: "Items", icon: Package },
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { to: "/items", label: "Items", icon: Package },
+  { to: "/categories", label: "Categories", icon: Tags },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileText },
-  { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
@@ -44,7 +45,11 @@ function initials(name: string): string {
   return (first + last).toUpperCase() || "?";
 }
 
-export default function Sidebar() {
+export default function Sidebar({
+  onOpenTutorial,
+}: {
+  onOpenTutorial: () => void;
+}) {
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -119,6 +124,19 @@ export default function Sidebar() {
 
       {/* Footer: user + logout */}
       <div className="border-t p-2">
+        <Button
+          variant="ghost"
+          size={collapsed ? "icon" : "default"}
+          onClick={onOpenTutorial}
+          title={collapsed ? "Quick guide" : undefined}
+          className={cn(
+            "w-full text-sidebar-foreground/80 hover:text-sidebar-foreground",
+            collapsed ? "h-9" : "justify-start"
+          )}
+        >
+          <HelpCircle className="h-4 w-4 shrink-0" />
+          {!collapsed && <span className="ml-2">Quick guide</span>}
+        </Button>
         <div
           className={cn(
             "flex items-center gap-3 rounded-md px-2 py-2",

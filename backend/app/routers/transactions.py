@@ -89,6 +89,7 @@ def list_transactions(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     created_by: uuid.UUID | None = None,
+    recipient_name: str | None = None,
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
@@ -109,6 +110,10 @@ def list_transactions(
         query = query.filter(Transaction.transaction_date <= end_date)
     if created_by is not None:
         query = query.filter(Transaction.created_by == created_by)
+    if recipient_name and recipient_name.strip():
+        query = query.filter(
+            Transaction.recipient_name.ilike(f"%{recipient_name.strip()}%")
+        )
 
     total = query.count()
     txns = (

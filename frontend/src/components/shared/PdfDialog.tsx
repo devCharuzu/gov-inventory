@@ -30,7 +30,7 @@ export default function PdfDialog({
 
   return (
     <Dialog open={!!url} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[90vh] w-[90vw] max-w-5xl gap-2 p-4">
+      <DialogContent className="h-[94vh] w-[96vw] max-w-[1400px] gap-2 p-3 sm:p-4">
         <DialogHeader>
           <DialogTitle className="text-base">{title}</DialogTitle>
         </DialogHeader>
@@ -38,7 +38,7 @@ export default function PdfDialog({
           <iframe
             src={url}
             title={title}
-            className="h-full w-full rounded-md border bg-muted/20"
+            className="min-h-0 h-full w-full rounded-md border bg-muted/20"
           />
         )}
       </DialogContent>

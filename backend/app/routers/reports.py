@@ -192,6 +192,7 @@ def transaction_history(
     end_date: datetime | None = None,
     type: TransactionType | None = None,
     item_id: uuid.UUID | None = None,
+    recipient_name: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -205,6 +206,10 @@ def transaction_history(
         query = query.filter(Transaction.transaction_type == type)
     if item_id is not None:
         query = query.filter(Transaction.item_id == item_id)
+    if recipient_name and recipient_name.strip():
+        query = query.filter(
+            Transaction.recipient_name.ilike(f"%{recipient_name.strip()}%")
+        )
     txns = query.order_by(Transaction.transaction_date.desc()).all()
 
     item_codes = {
@@ -237,6 +242,8 @@ def transaction_history(
         )
     if type:
         parts.append(f"Type: {type.value}")
+    if recipient_name and recipient_name.strip():
+        parts.append(f"Employee: {_e(recipient_name.strip())}")
     range_line = " &nbsp;|&nbsp; ".join(parts) or "All transactions"
     region = _get_region(db)
 

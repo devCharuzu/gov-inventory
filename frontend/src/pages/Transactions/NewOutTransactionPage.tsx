@@ -8,7 +8,7 @@ import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppLayout, PageWrapper } from "@/components/layout";
-import { ItemCombobox, PdfDialog } from "@/components/shared";
+import { EmployeeCombobox, ItemCombobox, PdfDialog } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,20 +21,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { itemsService } from "@/lib/services/items.service";
 import { reportsService } from "@/lib/services/reports.service";
-import { signatoriesService } from "@/lib/services/signatories.service";
 import { transactionsService } from "@/lib/services/transactions.service";
 import type { Item } from "@/types/item.types";
-import type { Signatory } from "@/types/signatory.types";
 
 const schema = z.object({
   item_id: z.string().min(1, "Item is required"),
@@ -61,8 +52,8 @@ export default function NewOutTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<Signatory[]>([]);
   const [recipientId, setRecipientId] = useState<string>("");
+  const [recipientName, setRecipientName] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -84,10 +75,6 @@ export default function NewOutTransactionPage() {
         .catch(() => undefined);
     }
   }, [presetItemId]);
-
-  useEffect(() => {
-    signatoriesService.list().then(setEmployees).catch(() => undefined);
-  }, []);
 
   const quantity = form.watch("quantity");
   const available = selectedItem?.quantity ?? 0;
@@ -262,49 +249,22 @@ export default function NewOutTransactionPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Recipient</FormLabel>
-                        <Select
-                          value={recipientId || undefined}
-                          onValueChange={(v) => {
-                            const emp = employees.find((e) => e.id === v);
-                            setRecipientId(v ?? "");
-                            field.onChange(emp?.full_name ?? "");
-                            form.setValue(
-                              "recipient_department",
-                              emp?.unit ?? ""
-                            );
-                          }}
-                          disabled={submitting}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  employees.length
-                                    ? "Select employee…"
-                                    : "No employees — add in Settings"
-                                }
-                              >
-                                {(val) =>
-                                  employees.find((e) => e.id === val)
-                                    ?.full_name ?? ""
-                                }
-                              </SelectValue>
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {employees.map((e) => (
-                              <SelectItem key={e.id} value={e.id}>
-                                <div>
-                                  <p>{e.full_name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {e.designation}
-                                    {e.unit ? ` · ${e.unit}` : ""}
-                                  </p>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <EmployeeCombobox
+                            value={recipientId}
+                            selectedLabel={recipientName}
+                            disabled={submitting}
+                            onSelect={(employee) => {
+                              setRecipientId(employee.id);
+                              setRecipientName(employee.full_name);
+                              field.onChange(employee.full_name);
+                              form.setValue(
+                                "recipient_department",
+                                employee.unit ?? ""
+                              );
+                            }}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

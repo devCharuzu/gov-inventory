@@ -26,7 +26,7 @@ export default function PDFPreview({
   if (!url && !loading) return null;
 
   return (
-    <div className="relative mt-6 h-[80vh] w-full overflow-hidden rounded-md border bg-muted/20">
+    <div className="relative mt-6 h-[calc(100vh-8rem)] min-h-[520px] w-full overflow-hidden rounded-md border bg-muted/20 shadow-sm">
       {url && (
         <iframe src={url} title={title} className="h-full w-full" />
       )}

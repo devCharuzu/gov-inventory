@@ -1,19 +1,30 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
+
+EmployeeUnit = Literal[
+    "Administrative Unit",
+    "Planning Unit",
+    "Regulatory Unit",
+    "Technical Assistance Unit",
+    "Research Unit",
+    "Directors Office",
+    "Others",
+]
 
 
 class SignatoryCreate(BaseModel):
     full_name: str
     designation: str
-    unit: str | None = None
+    unit: EmployeeUnit
 
 
 class SignatoryUpdate(BaseModel):
     full_name: str | None = None
     designation: str | None = None
-    unit: str | None = None
+    unit: EmployeeUnit | None = None
     is_active: bool | None = None
 
 

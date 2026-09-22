@@ -11,6 +11,8 @@
       color: #000; font-size: 12px; margin: 0;
     }
     .sheet { display: table; width: 100%; table-layout: fixed; }
+    .request-page { page-break-after: always; break-after: page; }
+    .request-page:last-child { page-break-after: auto; break-after: auto; }
     .slip {
       display: table-cell; width: 50%; vertical-align: top;
       padding: 0 14px;
@@ -59,6 +61,22 @@
   </style>
 </head>
 <body>
+  {% set forms = batch_forms if batch_forms is defined else [{
+    "transaction": transaction,
+    "item": item,
+    "issue_date": issue_date,
+    "certifier": certifier,
+    "issuer": issuer,
+    "region": region
+  }] %}
+  {% for form in forms %}
+  {% set transaction = form.transaction %}
+  {% set item = form.item %}
+  {% set issue_date = form.issue_date %}
+  {% set certifier = form.certifier %}
+  {% set issuer = form.issuer %}
+  {% set region = form.region %}
+  <div class="request-page">
   <div class="sheet">
 
     <!-- LEFT: Request for Office Supplies Slip -->
@@ -166,5 +184,7 @@
     </div>
 
   </div>
+  </div>
+  {% endfor %}
 </body>
 </html>

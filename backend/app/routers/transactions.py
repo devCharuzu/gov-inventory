@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -90,6 +91,8 @@ def list_transactions(
     end_date: datetime | None = None,
     created_by: uuid.UUID | None = None,
     recipient_name: str | None = None,
+    recipient_unit: str | None = None,
+    item_search: str | None = None,
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
@@ -113,6 +116,17 @@ def list_transactions(
     if recipient_name and recipient_name.strip():
         query = query.filter(
             Transaction.recipient_name.ilike(f"%{recipient_name.strip()}%")
+        )
+    if recipient_unit and recipient_unit.strip():
+        query = query.filter(
+            Transaction.recipient_department == recipient_unit.strip()
+        )
+    if item_search and item_search.strip():
+        pattern = f"%{item_search.strip()}%"
+        query = query.filter(
+            Transaction.item.has(
+                or_(Item.name.ilike(pattern), Item.code.ilike(pattern))
+            )
         )
 
     total = query.count()

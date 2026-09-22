@@ -47,6 +47,7 @@ import { auditService } from "@/lib/services/audit.service";
 import { authService } from "@/lib/services/auth.service";
 import { backupService } from "@/lib/services/backup.service";
 import { signatoriesService } from "@/lib/services/signatories.service";
+import { EMPLOYEE_UNITS, isEmployeeUnit } from "@/lib/employee-units";
 import { transactionsService } from "@/lib/services/transactions.service";
 import type { AuditLog } from "@/types/audit.types";
 import type { User, UserRole } from "@/types/auth.types";
@@ -1065,17 +1066,25 @@ function SignatoriesTab() {
     setSubmitting(true);
     try {
       if (editing) {
+        if (!isEmployeeUnit(unitVal)) {
+          toast.error("Choose one of the listed units before saving");
+          return;
+        }
         await signatoriesService.update(editing.id, {
           full_name: nameVal.trim(),
           designation: desigVal.trim(),
-          unit: unitVal.trim(),
+          unit: unitVal,
         });
         toast.success("Employee updated");
       } else {
+        if (!isEmployeeUnit(unitVal)) {
+          toast.error("Choose a unit before adding the employee");
+          return;
+        }
         await signatoriesService.create({
           full_name: nameVal.trim(),
           designation: desigVal.trim(),
-          unit: unitVal.trim() || undefined,
+          unit: unitVal,
         });
         toast.success("Employee added");
       }
@@ -1276,6 +1285,11 @@ function SignatoriesTab() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {p.unit || "—"}
+                        {p.unit && !isEmployeeUnit(p.unit) && (
+                          <span className="ml-2 text-xs text-amber-700">
+                            Needs unit update
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -1348,17 +1362,33 @@ function SignatoriesTab() {
               />
             </div>
             <div className="space-y-2">
-              <Label>
-                Unit{" "}
-                <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                placeholder="e.g. Administrative Section"
-                value={unitVal}
-                onChange={(e) => setUnitVal(e.target.value)}
+              <Label>Unit</Label>
+              <Select
+                value={unitVal || undefined}
+                onValueChange={(value) => setUnitVal(value ?? "")}
                 disabled={submitting}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an office unit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {unitVal && !isEmployeeUnit(unitVal) && (
+                    <SelectItem value={unitVal}>
+                      Current: {unitVal} — choose a standard unit
+                    </SelectItem>
+                  )}
+                  {EMPLOYEE_UNITS.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {editing && unitVal && !isEmployeeUnit(unitVal)
+                  ? "This employee has a manually entered unit. Choose a standard unit to update the record."
+                  : "Choose a unit so employees and release reports stay grouped consistently."}
+              </p>
             </div>
           </div>
           <DialogFooter>

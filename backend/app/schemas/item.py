@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.category import CategoryOut
+
 
 class ItemBase(BaseModel):
     """Shared item fields."""
@@ -46,6 +48,7 @@ class ItemOut(ItemBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    category: CategoryOut | None = None
 
 
 class ItemDetail(ItemOut):

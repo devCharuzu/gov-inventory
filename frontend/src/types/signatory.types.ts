@@ -10,7 +10,7 @@ export interface Signatory {
 export interface SignatoryCreate {
   full_name: string;
   designation: string;
-  unit?: string;
+  unit: string;
 }
 
 export interface SignatorySettings {

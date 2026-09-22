@@ -6,7 +6,7 @@ export interface Item {
   name: string;
   description: string | null;
   category_id: string | null;
-  category: Category | null;
+  category?: Category | null;
   unit: string | null;
   quantity: number;
   minimum_quantity: number;

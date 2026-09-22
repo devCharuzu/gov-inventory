@@ -13,6 +13,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -112,6 +113,78 @@ def request_form(
     return _pdf_response(pdf, f"request-form-{txn.reference_number}.pdf")
 
 
+@router.get("/request-forms")
+def request_forms(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    item_id: uuid.UUID | None = None,
+    item_search: str | None = None,
+    recipient_name: str | None = None,
+    recipient_unit: str | None = None,
+    transaction_ids: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """Render up to 250 matching stock-out requests as a combined PDF."""
+    query = db.query(Transaction).filter(
+        Transaction.transaction_type == TransactionType.OUT,
+        Transaction.voided.is_(False),
+    )
+    ids = _selected_transaction_ids(transaction_ids)
+    if ids is not None:
+        query = query.filter(Transaction.id.in_(ids))
+    if start_date is not None:
+        query = query.filter(Transaction.transaction_date >= start_date)
+    if end_date is not None:
+        query = query.filter(Transaction.transaction_date <= end_date)
+    if item_id is not None:
+        query = query.filter(Transaction.item_id == item_id)
+    if item_search and item_search.strip():
+        pattern = f"%{item_search.strip()}%"
+        query = query.filter(
+            Transaction.item.has(
+                or_(Item.name.ilike(pattern), Item.code.ilike(pattern))
+            )
+        )
+    if recipient_name and recipient_name.strip():
+        query = query.filter(
+            Transaction.recipient_name.ilike(f"%{recipient_name.strip()}%")
+        )
+    if recipient_unit and recipient_unit.strip():
+        query = query.filter(
+            Transaction.recipient_department == recipient_unit.strip()
+        )
+
+    txns = query.order_by(Transaction.transaction_date.desc()).limit(251).all()
+    if len(txns) > 250:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="This batch has more than 250 request slips. Narrow it by unit or date and try again.",
+        )
+    if not txns:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No stock-out requests match these filters.",
+        )
+
+    certifier = _get_signatory(db, "certifier_id")
+    issuer = _get_signatory(db, "issuer_id")
+    region = _get_region(db)
+    forms = [
+        {
+            "transaction": txn,
+            "item": txn.item,
+            "issue_date": _fmt(txn.transaction_date),
+            "certifier": certifier,
+            "issuer": issuer,
+            "region": region,
+        }
+        for txn in txns
+    ]
+    pdf = render_template_to_pdf("request_form.html", {"batch_forms": forms})
+    return _pdf_response(pdf, f"request-forms-{len(txns)}.pdf")
+
+
 @router.get("/received-form/{transaction_id}")
 def received_form(
     transaction_id: uuid.UUID,
@@ -186,18 +259,44 @@ def _letterhead(region: str) -> str:
     )
 
 
+def _selected_transaction_ids(raw_ids: str | None) -> list[uuid.UUID] | None:
+    if not raw_ids:
+        return None
+    values = [value.strip() for value in raw_ids.split(",") if value.strip()]
+    if not values:
+        return None
+    if len(values) > 250:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Select at most 250 transactions per batch.",
+        )
+    try:
+        return [uuid.UUID(value) for value in values]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="One or more selected transaction IDs are invalid.",
+        ) from exc
+
+
 @router.get("/transaction-history")
 def transaction_history(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     type: TransactionType | None = None,
     item_id: uuid.UUID | None = None,
+    item_search: str | None = None,
     recipient_name: str | None = None,
+    recipient_unit: str | None = None,
+    transaction_ids: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> StreamingResponse:
     """Render a filtered transaction history table as PDF."""
     query = db.query(Transaction)
+    ids = _selected_transaction_ids(transaction_ids)
+    if ids is not None:
+        query = query.filter(Transaction.id.in_(ids))
     if start_date is not None:
         query = query.filter(Transaction.transaction_date >= start_date)
     if end_date is not None:
@@ -206,9 +305,20 @@ def transaction_history(
         query = query.filter(Transaction.transaction_type == type)
     if item_id is not None:
         query = query.filter(Transaction.item_id == item_id)
+    if item_search and item_search.strip():
+        pattern = f"%{item_search.strip()}%"
+        query = query.filter(
+            Transaction.item.has(
+                or_(Item.name.ilike(pattern), Item.code.ilike(pattern))
+            )
+        )
     if recipient_name and recipient_name.strip():
         query = query.filter(
             Transaction.recipient_name.ilike(f"%{recipient_name.strip()}%")
+        )
+    if recipient_unit and recipient_unit.strip():
+        query = query.filter(
+            Transaction.recipient_department == recipient_unit.strip()
         )
     txns = query.order_by(Transaction.transaction_date.desc()).all()
 
@@ -244,6 +354,12 @@ def transaction_history(
         parts.append(f"Type: {type.value}")
     if recipient_name and recipient_name.strip():
         parts.append(f"Employee: {_e(recipient_name.strip())}")
+    if recipient_unit and recipient_unit.strip():
+        parts.append(f"Unit: {_e(recipient_unit.strip())}")
+    if item_search and item_search.strip():
+        parts.append(f"Item: {_e(item_search.strip())}")
+    if ids is not None:
+        parts.append(f"Selected: {len(ids)}")
     range_line = " &nbsp;|&nbsp; ".join(parts) or "All transactions"
     region = _get_region(db)
 

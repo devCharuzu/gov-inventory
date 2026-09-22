@@ -14,6 +14,8 @@ export interface TransactionFilters {
   end_date?: string;
   created_by?: string;
   recipient_name?: string;
+  recipient_unit?: string;
+  item_search?: string;
   page?: number;
   size?: number;
 }

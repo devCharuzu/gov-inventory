@@ -282,10 +282,15 @@ export default function NewOutTransactionPage() {
                         </FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="Auto-filled from employee"
+                            placeholder="Choose an employee to fill their unit"
+                            readOnly
+                            className="bg-muted"
                             {...field}
                           />
                         </FormControl>
+                        <FormDescription>
+                          Automatically copied from the selected employee.
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

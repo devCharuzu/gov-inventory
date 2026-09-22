@@ -52,6 +52,7 @@ import {
   reportsService,
   type StoredReport,
 } from "@/lib/services/reports.service";
+import { EMPLOYEE_UNITS } from "@/lib/employee-units";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/types/item.types";
 import type { Transaction, TransactionType } from "@/types/transaction.types";
@@ -182,6 +183,7 @@ export default function ReportsPage() {
   const [histType, setHistType] = useState<string | undefined>(undefined);
   const [histItem, setHistItem] = useState<Item | null>(null);
   const [histEmployee, setHistEmployee] = useState("");
+  const [histUnit, setHistUnit] = useState("");
   // Stored documents tab
   const [stored, setStored] = useState<StoredReport[]>([]);
   const [storedLoading, setStoredLoading] = useState(true);
@@ -415,6 +417,22 @@ export default function ReportsPage() {
                     placeholder="Search employee / recipient"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Unit (optional)</Label>
+                  <Select
+                    value={histUnit || undefined}
+                    onValueChange={(value) => setHistUnit(value ?? "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All units" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMPLOYEE_UNITS.map((unit) => (
+                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {dateFilter.preset && (
                   <p className="text-xs text-muted-foreground">
                     Using date range: {dateFilter.start} → {dateFilter.end}
@@ -428,6 +446,7 @@ export default function ReportsPage() {
                         ...dateParams,
                         item_id: histItem?.id,
                         recipient_name: histEmployee.trim() || undefined,
+                        recipient_unit: histUnit || undefined,
                       })
                     )
                   }
@@ -439,6 +458,7 @@ export default function ReportsPage() {
                           ...dateParams,
                           item_id: histItem?.id,
                           recipient_name: histEmployee.trim() || undefined,
+                          recipient_unit: histUnit || undefined,
                         }),
                       `transaction-history-${Date.now()}.pdf`
                     )

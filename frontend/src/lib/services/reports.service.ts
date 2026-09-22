@@ -6,7 +6,10 @@ export interface TransactionHistoryParams {
   end_date?: string;
   type?: TransactionType;
   item_id?: string;
+  item_search?: string;
   recipient_name?: string;
+  recipient_unit?: string;
+  transaction_ids?: string;
 }
 
 export interface AnalyticsReportParams {
@@ -38,6 +41,11 @@ export const reportsService = {
   /** Returns an object URL for the requisition/issue slip PDF (OUT txn). */
   getRequestForm(transactionId: string): Promise<string> {
     return fetchPdfUrl(`/reports/request-form/${transactionId}`);
+  },
+
+  /** Returns a combined PDF of matching stock-out request and issue slips. */
+  getRequestForms(params: TransactionHistoryParams = {}): Promise<string> {
+    return fetchPdfUrl("/reports/request-forms", params);
   },
 
   /** Returns an object URL for the receiving report PDF (IN txn). */

@@ -14,9 +14,11 @@ import {
 import {
   endOfMonth,
   endOfWeek,
+  endOfYear,
   format,
   startOfMonth,
   startOfWeek,
+  startOfYear,
 } from "date-fns";
 import { toast } from "sonner";
 
@@ -49,6 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { reportsService } from "@/lib/services/reports.service";
+import { EMPLOYEE_UNITS } from "@/lib/employee-units";
 import {
   transactionsService,
   type TransactionFilters,
@@ -89,6 +92,7 @@ export default function TransactionsPage() {
   const [datePreset, setDatePreset] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
 
   const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -102,6 +106,9 @@ export default function TransactionsPage() {
     } else if (preset === "month") {
       setStartDate(iso(startOfMonth(now)));
       setEndDate(iso(endOfMonth(now)));
+    } else if (preset === "year") {
+      setStartDate(iso(startOfYear(now)));
+      setEndDate(iso(endOfYear(now)));
     } else if (preset === "specific") {
       const date = iso(now);
       setStartDate(date);
@@ -116,7 +123,7 @@ export default function TransactionsPage() {
   const [toVoid, setToVoid] = useState<Transaction | null>(null);
   const [toDelete, setToDelete] = useState<Transaction | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Map<string, Transaction>>(new Map());
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const buildFilters = useCallback(
@@ -131,8 +138,10 @@ export default function TransactionsPage() {
         ? new Date(`${endDate}T23:59:59.999`).toISOString()
         : undefined,
       recipient_name: employeeSearch.trim() || undefined,
+      recipient_unit: unitFilter || undefined,
+      item_search: search.trim() || undefined,
     }),
-    [page, type, startDate, endDate, employeeSearch]
+    [page, type, startDate, endDate, employeeSearch, unitFilter, search]
   );
 
   const fetchRows = useCallback(() => {
@@ -140,20 +149,12 @@ export default function TransactionsPage() {
     transactionsService
       .getTransactions(buildFilters())
       .then((res) => {
-        // Item search remains client-side; employee search is server-side so
-        // it works across every page of the transaction history.
-        const filtered = search
-          ? res.items.filter((t) =>
-              t.item?.name?.toLowerCase().includes(search.toLowerCase()) ||
-              t.item?.code?.toLowerCase().includes(search.toLowerCase())
-            )
-          : res.items;
-        setRows(filtered);
+        setRows(res.items);
         setTotal(res.total);
       })
       .catch(() => toast.error("Failed to load transactions"))
       .finally(() => setLoading(false));
-  }, [buildFilters, search]);
+  }, [buildFilters]);
 
   useEffect(() => {
     const t = setTimeout(fetchRows, 250);
@@ -162,7 +163,8 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [type, startDate, endDate, employeeSearch]);
+    setSelected(new Map());
+  }, [type, startDate, endDate, employeeSearch, unitFilter, search]);
 
   async function handleVoid() {
     if (!toVoid) return;
@@ -180,7 +182,11 @@ export default function TransactionsPage() {
     try {
       await transactionsService.hardDeleteTransaction(toDelete.id);
       toast.success(`Deleted ${toDelete.reference_number}`);
-      setSelected((s) => { s.delete(toDelete.id); return new Set(s); });
+      setSelected((previous) => {
+        const next = new Map(previous);
+        next.delete(toDelete.id);
+        return next;
+      });
       fetchRows();
     } catch {
       toast.error("Failed to delete transaction");
@@ -188,12 +194,12 @@ export default function TransactionsPage() {
   }
 
   async function handleDeleteSelected() {
-    const ids = [...selected];
+    const ids = [...selected.keys()];
     if (!ids.length) return;
     try {
       const res = await transactionsService.bulkDeleteTransactions(ids);
       toast.success(`Deleted ${res.deleted} transaction${res.deleted === 1 ? "" : "s"}`);
-      setSelected(new Set());
+      setSelected(new Map());
       fetchRows();
     } catch {
       toast.error("Failed to delete transactions");
@@ -206,30 +212,75 @@ export default function TransactionsPage() {
     try {
       const res = await transactionsService.bulkDeleteTransactions(ids);
       toast.success(`Deleted ${res.deleted} transaction${res.deleted === 1 ? "" : "s"}`);
-      setSelected(new Set());
+      setSelected(new Map());
       fetchRows();
     } catch {
       toast.error("Failed to delete transactions");
     }
   }
 
-  function toggleSelect(id: string) {
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(id)) {
-        n.delete(id);
+  function toggleSelect(transaction: Transaction) {
+    if (!selected.has(transaction.id) && selected.size >= 250) {
+      toast.error("Select at most 250 transactions per batch");
+      return;
+    }
+    setSelected((previous) => {
+      const next = new Map(previous);
+      if (next.has(transaction.id)) {
+        next.delete(transaction.id);
       } else {
-        n.add(id);
+        next.set(transaction.id, transaction);
       }
-      return n;
+      return next;
     });
   }
 
   function toggleSelectAll() {
-    if (selected.size === rows.length && rows.length > 0) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(rows.map((r) => r.id)));
+    const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
+    const newSelections = rows.filter((row) => !selected.has(row.id)).length;
+    if (!allVisibleSelected && selected.size + newSelections > 250) {
+      toast.error("Select at most 250 transactions per batch");
+      return;
+    }
+    setSelected((previous) => {
+      const next = new Map(previous);
+      rows.forEach((row) => {
+        if (allVisibleSelected) next.delete(row.id);
+        else next.set(row.id, row);
+      });
+      return next;
+    });
+  }
+
+  async function toggleSelectAllMatching() {
+    if (selected.size === total) {
+      setSelected(new Map());
+      return;
+    }
+
+    try {
+      const filters = { ...buildFilters(), page: 1, size: 100 };
+      const firstPage = await transactionsService.getTransactions(filters);
+      if (firstPage.total > 250) {
+        toast.error("More than 250 records match. Narrow by date, unit, or employee first.");
+        return;
+      }
+
+      const remainingPages = await Promise.all(
+        Array.from(
+          { length: Math.max(0, Math.ceil(firstPage.total / 100) - 1) },
+          (_, index) =>
+            transactionsService.getTransactions({ ...filters, page: index + 2 })
+        )
+      );
+      const matchingRows = [
+        ...firstPage.items,
+        ...remainingPages.flatMap((response) => response.items),
+      ];
+      setSelected(new Map(matchingRows.map((transaction) => [transaction.id, transaction])));
+      toast.success(`${matchingRows.length} matching transaction${matchingRows.length === 1 ? "" : "s"} selected`);
+    } catch {
+      toast.error("Could not select all matching transactions");
     }
   }
 
@@ -244,12 +295,50 @@ export default function TransactionsPage() {
           ? new Date(`${endDate}T23:59:59.999`).toISOString()
           : undefined,
         recipient_name: employeeSearch.trim() || undefined,
+        recipient_unit: unitFilter || undefined,
+        item_search: search.trim() || undefined,
+        transaction_ids: selected.size ? [...selected.keys()].join(",") : undefined,
       });
       setPdfUrl(url);
     } catch {
       toast.error("Failed to export PDF");
     }
   }
+
+  async function exportRequestSlips() {
+    const selectedOut = [...selected.values()].filter(
+      (transaction) => transaction.transaction_type === "OUT" && !transaction.voided
+    );
+    if (selected.size > 0 && selectedOut.length === 0) {
+      toast.info("Select at least one active OUT transaction to print request slips");
+      return;
+    }
+    try {
+      const url = await reportsService.getRequestForms(
+        selectedOut.length
+          ? { transaction_ids: selectedOut.map((transaction) => transaction.id).join(",") }
+          : {
+              start_date: startDate
+                ? new Date(`${startDate}T00:00:00`).toISOString()
+                : undefined,
+              end_date: endDate
+                ? new Date(`${endDate}T23:59:59.999`).toISOString()
+                : undefined,
+              recipient_name: employeeSearch.trim() || undefined,
+              recipient_unit: unitFilter || undefined,
+              item_search: search.trim() || undefined,
+            }
+      );
+      setPdfUrl(url);
+    } catch {
+      toast.error("No matching stock-out request slips could be generated");
+    }
+  }
+
+  const selectedOutCount = [...selected.values()].filter(
+    (transaction) => transaction.transaction_type === "OUT" && !transaction.voided
+  ).length;
+  const allMatchingSelected = total > 0 && selected.size === total;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -259,11 +348,19 @@ export default function TransactionsPage() {
         title="Transactions"
         subtitle="Stock-in and stock-out records"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={exportPdf}>
               <Printer className="mr-2 h-4 w-4" />
-              Batch Print
+              {selected.size ? `History PDF (${selected.size})` : "Batch Print History"}
             </Button>
+            {(type === "OUT" || selectedOutCount > 0) && (
+              <Button variant="outline" onClick={exportRequestSlips}>
+                <Printer className="mr-2 h-4 w-4" />
+                {selectedOutCount
+                  ? `OUT Request Slips (${selectedOutCount})`
+                  : "Batch OUT Request Slips"}
+              </Button>
+            )}
             {isAdmin && selected.size > 0 && (
               <Button
                 variant="destructive"
@@ -324,6 +421,7 @@ export default function TransactionsPage() {
             <SelectContent>
               <SelectItem value="week">This week</SelectItem>
               <SelectItem value="month">This month</SelectItem>
+              <SelectItem value="year">This year</SelectItem>
               <SelectItem value="specific">Specific date</SelectItem>
             </SelectContent>
           </Select>
@@ -343,6 +441,30 @@ export default function TransactionsPage() {
               aria-label="Specific date"
             />
           )}
+          <Select
+            value={unitFilter || undefined}
+            onValueChange={(value) => setUnitFilter(value ?? "")}
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="All units" />
+            </SelectTrigger>
+            <SelectContent>
+              {EMPLOYEE_UNITS.map((unit) => (
+                <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {unitFilter && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setUnitFilter("")}
+              aria-label="Clear unit filter"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
           <Input
             placeholder="Search item or code…"
             value={search}
@@ -356,8 +478,27 @@ export default function TransactionsPage() {
             className="max-w-xs"
           />
           <p className="basis-full text-xs text-muted-foreground">
-            Batch Print uses the selected type, date range, and employee filter.
+            Select rows for a manual batch, or leave them unselected to print all matches. Filters include unit and date; selected batches are limited to 250 records.
           </p>
+          {total > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectAllMatching}
+              disabled={loading || total > 250}
+            >
+              {total > 250
+                ? "Narrow filters to 250 or fewer"
+                : allMatchingSelected
+                  ? "Clear selection"
+                  : `Select all ${total} matching`}
+            </Button>
+          )}
+          {selected.size > 0 && (
+            <p className="basis-full text-xs font-medium text-primary">
+              {selected.size} selected across pages · table header selects the current page.
+            </p>
+          )}
         </div>
 
         {/* Table */}
@@ -365,15 +506,13 @@ export default function TransactionsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {isAdmin && (
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={rows.length > 0 && selected.size === rows.length}
-                      onCheckedChange={toggleSelectAll}
-                      aria-label="Select all"
-                    />
-                  </TableHead>
-                )}
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={rows.length > 0 && rows.every((row) => selected.has(row.id))}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all transactions on this page"
+                  />
+                </TableHead>
                 <TableHead>Ref No.</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Item</TableHead>
@@ -388,7 +527,7 @@ export default function TransactionsPage() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: isAdmin ? 9 : 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
@@ -397,7 +536,7 @@ export default function TransactionsPage() {
                 ))
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 9 : 8} className="h-40">
+                  <TableCell colSpan={9} className="h-40">
                     <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                       <Inbox className="h-8 w-8" />
                       <p className="text-sm">No transactions found</p>
@@ -410,15 +549,13 @@ export default function TransactionsPage() {
                     key={t.id}
                     className={t.voided ? "bg-muted/40" : ""}
                   >
-                    {isAdmin && (
-                      <TableCell>
-                        <Checkbox
-                          checked={selected.has(t.id)}
-                          onCheckedChange={() => toggleSelect(t.id)}
-                          aria-label="Select row"
-                        />
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(t.id)}
+                        onCheckedChange={() => toggleSelect(t)}
+                        aria-label={`Select ${t.reference_number}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       <span className={t.voided ? "text-muted-foreground line-through" : ""}>
                         {t.reference_number}
@@ -439,10 +576,17 @@ export default function TransactionsPage() {
                       {t.item?.name ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">{t.quantity}</TableCell>
-                    <TableCell className="max-w-[160px] truncate text-sm">
-                      {t.transaction_type === "OUT"
-                        ? t.recipient_name ?? "—"
-                        : "—"}
+                    <TableCell className="max-w-[180px] text-sm">
+                      {t.transaction_type === "OUT" ? (
+                        <div className="min-w-0">
+                          <p className="truncate">{t.recipient_name ?? "—"}</p>
+                          {t.recipient_department && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {t.recipient_department}
+                            </p>
+                          )}
+                        </div>
+                      ) : "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {format(new Date(t.transaction_date), "MMM d, yyyy")}

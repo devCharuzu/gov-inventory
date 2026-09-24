@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,6 +19,7 @@ from app.schemas.analytics import (
     StockMovementPoint,
     Summary,
     TopItem,
+    TopRequestingUnit,
     TrendPoint,
 )
 from app.utils.security import get_current_user
@@ -222,6 +223,64 @@ def top_items(
             )
         )
     return result
+
+
+@router.get("/top-requesting-units", response_model=list[TopRequestingUnit])
+def top_requesting_units(
+    year: int | None = None,
+    limit: int = 5,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[TopRequestingUnit]:
+    """Return units ranked by the number of non-voided OUT requests."""
+    use_year_bounds = False
+    if year is not None and start_date is None and end_date is None:
+        use_year_bounds = True
+        start_date = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+
+    request_count = func.count(Transaction.id)
+    total_quantity = func.coalesce(func.sum(Transaction.quantity), 0)
+    stmt = (
+        select(
+            Transaction.recipient_department,
+            request_count,
+            total_quantity,
+        )
+        .where(
+            Transaction.transaction_type == TransactionType.OUT,
+            Transaction.voided.is_(False),
+            Transaction.recipient_department.is_not(None),
+            func.trim(Transaction.recipient_department) != "",
+        )
+    )
+    if start_date is not None:
+        stmt = stmt.where(Transaction.transaction_date >= start_date)
+    if end_date is not None:
+        if use_year_bounds:
+            stmt = stmt.where(Transaction.transaction_date < end_date)
+        else:
+            stmt = stmt.where(Transaction.transaction_date <= end_date)
+
+    rows = db.execute(
+        stmt.group_by(Transaction.recipient_department)
+        .order_by(
+            request_count.desc(),
+            total_quantity.desc(),
+            Transaction.recipient_department.asc(),
+        )
+        .limit(min(max(limit, 1), 50))
+    ).all()
+    return [
+        TopRequestingUnit(
+            unit_name=unit_name,
+            request_count=int(count),
+            total_quantity=int(quantity),
+        )
+        for unit_name, count, quantity in rows
+    ]
 
 
 @router.get("/stock-movement", response_model=list[StockMovementPoint])

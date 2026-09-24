@@ -4,6 +4,7 @@ import {
   Eye,
   FileText,
   Inbox,
+  Loader2,
   Search,
   Trash2,
   X,
@@ -173,6 +174,8 @@ export default function ReportsPage() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [activeReportAction, setActiveReportAction] = useState<string | null>(null);
+  const reportActionLock = useRef(false);
 
   // Centralized date filter (shared across Generate tab)
   const [dateFilter, setDateFilter] = useState<DateFilter>(EMPTY_FILTER);
@@ -191,47 +194,82 @@ export default function ReportsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deletingBulk, setDeletingBulk] = useState(false);
+  const storedRequestId = useRef(0);
 
   const fetchStored = useCallback(() => {
+    const activeRequest = ++storedRequestId.current;
     setStoredLoading(true);
     reportsService
       .listStoredReports()
-      .then((list) => { setStored(list); setSelected(new Set()); })
-      .catch(() => toast.error("Failed to load stored documents"))
-      .finally(() => setStoredLoading(false));
+      .then((list) => {
+        if (activeRequest !== storedRequestId.current) return;
+        setStored(list);
+        setSelected(new Set());
+      })
+      .catch(() => {
+        if (activeRequest === storedRequestId.current) toast.error("Failed to load stored documents");
+      })
+      .finally(() => {
+        if (activeRequest === storedRequestId.current) setStoredLoading(false);
+      });
   }, []);
 
-  useEffect(fetchStored, [fetchStored]);
+  useEffect(() => {
+    fetchStored();
+    return () => {
+      storedRequestId.current += 1;
+    };
+  }, [fetchStored]);
 
   const filteredStored = stored.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase())
   );
 
   // Preview / download helpers
-  async function preview(loader: () => Promise<string>) {
-    setPreviewLoading(true);
-    setPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+  async function runReportAction(action: string, run: () => Promise<void>) {
+    if (reportActionLock.current) return;
+    reportActionLock.current = true;
+    setActiveReportAction(action);
     try {
-      setPreviewUrl(await loader());
-      previewRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch {
-      toast.error("Failed to generate report");
+      await run();
     } finally {
-      setPreviewLoading(false);
+      reportActionLock.current = false;
+      setActiveReportAction(null);
     }
   }
 
-  async function download(loader: () => Promise<string>, filename: string) {
-    try {
-      const url = await loader();
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-    } catch {
-      toast.error("Failed to download report");
-    }
+  async function preview(loader: () => Promise<string>, action: string) {
+    await runReportAction(action, async () => {
+      setPreviewLoading(true);
+      setPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      try {
+        setPreviewUrl(await loader());
+        previewRef.current?.scrollIntoView({ behavior: "smooth" });
+      } catch {
+        toast.error("Failed to generate report");
+      } finally {
+        setPreviewLoading(false);
+      }
+    });
+  }
+
+  async function download(
+    loader: () => Promise<string>,
+    filename: string,
+    action: string
+  ) {
+    await runReportAction(action, async () => {
+      try {
+        const url = await loader();
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      } catch {
+        toast.error("Failed to download report");
+      }
+    });
   }
 
   // Date params derived from filter
@@ -326,14 +364,19 @@ export default function ReportsPage() {
                 </div>
                 <ReportActions
                   disabled={!outTxn}
-                  onPreview={() =>
-                    outTxn && preview(() => reportsService.getRequestForm(outTxn.id))
-                  }
+                  actionKey="request-form"
+                  activeAction={activeReportAction}
+                  onPreview={() => outTxn &&
+                    preview(
+                      () => reportsService.getRequestForm(outTxn.id),
+                      "request-form-preview"
+                    )}
                   onDownload={() =>
                     outTxn &&
                     download(
                       () => reportsService.getRequestForm(outTxn.id),
-                      `request-form-${outTxn.reference_number}.pdf`
+                      `request-form-${outTxn.reference_number}.pdf`,
+                      "request-form-download"
                     )
                   }
                 />
@@ -354,14 +397,19 @@ export default function ReportsPage() {
                 </div>
                 <ReportActions
                   disabled={!inTxn}
-                  onPreview={() =>
-                    inTxn && preview(() => reportsService.getReceivedForm(inTxn.id))
-                  }
+                  actionKey="received-form"
+                  activeAction={activeReportAction}
+                  onPreview={() => inTxn &&
+                    preview(
+                      () => reportsService.getReceivedForm(inTxn.id),
+                      "received-form-preview"
+                    )}
                   onDownload={() =>
                     inTxn &&
                     download(
                       () => reportsService.getReceivedForm(inTxn.id),
-                      `received-form-${inTxn.reference_number}.pdf`
+                      `received-form-${inTxn.reference_number}.pdf`,
+                      "received-form-download"
                     )
                   }
                 />
@@ -439,17 +487,19 @@ export default function ReportsPage() {
                   </p>
                 )}
                 <ReportActions
+                  actionKey="transaction-history"
+                  activeAction={activeReportAction}
                   onPreview={() =>
-                    preview(() =>
-                      reportsService.getTransactionHistory({
+                    preview(
+                      () => reportsService.getTransactionHistory({
                         type: histType as TransactionType | undefined,
                         ...dateParams,
                         item_id: histItem?.id,
                         recipient_name: histEmployee.trim() || undefined,
                         recipient_unit: histUnit || undefined,
-                      })
-                    )
-                  }
+                      }),
+                      "transaction-history-preview"
+                    )}
                   onDownload={() =>
                     download(
                       () =>
@@ -460,7 +510,8 @@ export default function ReportsPage() {
                           recipient_name: histEmployee.trim() || undefined,
                           recipient_unit: histUnit || undefined,
                         }),
-                      `transaction-history-${Date.now()}.pdf`
+                      `transaction-history-${Date.now()}.pdf`,
+                      "transaction-history-download"
                     )
                   }
                 />
@@ -576,10 +627,15 @@ export default function ReportsPage() {
                               className="h-8 w-8"
                               aria-label="Preview"
                               onClick={() =>
-                                preview(() => reportsService.getStoredReport(f.name))
+                                preview(() => reportsService.getStoredReport(f.name), `stored-preview:${f.name}`)
                               }
+                              disabled={activeReportAction !== null}
                             >
-                              <Eye className="h-4 w-4" />
+                              {activeReportAction === `stored-preview:${f.name}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"
@@ -589,11 +645,17 @@ export default function ReportsPage() {
                               onClick={() =>
                                 download(
                                   () => reportsService.getStoredReport(f.name),
-                                  f.name
+                                  f.name,
+                                  `stored-download:${f.name}`
                                 )
                               }
+                              disabled={activeReportAction !== null}
                             >
-                              <Download className="h-4 w-4" />
+                              {activeReportAction === `stored-download:${f.name}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"
@@ -674,22 +736,34 @@ function ReportCard({
 
 function ReportActions({
   disabled,
+  actionKey,
+  activeAction,
   onPreview,
   onDownload,
 }: {
   disabled?: boolean;
+  actionKey: string;
+  activeAction: string | null;
   onPreview: () => void;
   onDownload: () => void;
 }) {
   return (
     <div className="flex gap-2 pt-1">
-      <Button disabled={disabled} onClick={onPreview}>
-        <Eye className="mr-2 h-4 w-4" />
-        Preview
+      <Button disabled={disabled || activeAction !== null} onClick={onPreview}>
+        {activeAction === `${actionKey}-preview` ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Eye className="mr-2 h-4 w-4" />
+        )}
+        {activeAction === `${actionKey}-preview` ? "Generating…" : "Preview"}
       </Button>
-      <Button variant="outline" disabled={disabled} onClick={onDownload}>
-        <Download className="mr-2 h-4 w-4" />
-        Download
+      <Button variant="outline" disabled={disabled || activeAction !== null} onClick={onDownload}>
+        {activeAction === `${actionKey}-download` ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Download className="mr-2 h-4 w-4" />
+        )}
+        {activeAction === `${actionKey}-download` ? "Preparing…" : "Download"}
       </Button>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,14 +34,23 @@ export default function TransactionRefCombobox({
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Transaction[]>([]);
   const [selectedRef, setSelectedRef] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setLoading(true);
+    setLoadError(false);
     transactionsService
       .getTransactions({ type, page: 1, size: 50 })
       .then((res) => active && setRows(res.items))
-      .catch(() => active && setRows([]));
+      .catch(() => {
+        if (!active) return;
+        setRows([]);
+        setLoadError(true);
+      })
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
@@ -79,10 +88,24 @@ export default function TransactionRefCombobox({
             placeholder="Search reference no…"
             value={search}
             onValueChange={setSearch}
+            aria-label="Search transaction reference"
           />
           <CommandList>
-            <CommandEmpty>No transactions found.</CommandEmpty>
-            <CommandGroup>
+            {(loading || loadError || filtered.length === 0) && (
+              <CommandEmpty>
+                {loading ? (
+                  <span className="inline-flex items-center gap-2" role="status" aria-live="polite">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Loading transactions…
+                  </span>
+                ) : loadError ? (
+                  "Couldn’t load transactions. Close and reopen to retry."
+                ) : (
+                  "No transactions found."
+                )}
+              </CommandEmpty>
+            )}
+            {!loading && !loadError && filtered.length > 0 && <CommandGroup>
               {filtered.map((t) => (
                 <CommandItem
                   key={t.id}
@@ -107,7 +130,7 @@ export default function TransactionRefCombobox({
                   </span>
                 </CommandItem>
               ))}
-            </CommandGroup>
+            </CommandGroup>}
           </CommandList>
         </Command>
       </PopoverContent>

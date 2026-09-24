@@ -46,7 +46,9 @@
     table.grid th {
       font-size: 11px; text-transform: none; font-weight: bold; text-align: left;
     }
-    table.grid td.qty { width: 32%; text-align: center; }
+    table.grid th.qty, table.grid td.qty { width: 22%; text-align: center; }
+    table.grid th.unit, table.grid td.unit { width: 18%; text-align: center; }
+    table.grid td.item { overflow-wrap: anywhere; }
     table.grid td { height: 20px; font-size: 11px; }
 
     .signs { margin-top: 16px; font-size: 11px; }
@@ -103,15 +105,16 @@
 
       <table class="grid">
         <thead>
-          <tr><th class="qty">Quantity</th><th>Item</th></tr>
+          <tr><th class="qty">Quantity</th><th class="unit">Unit</th><th>Item</th></tr>
         </thead>
         <tbody>
           <tr>
             <td class="qty">{{ transaction.quantity }}</td>
-            <td>{{ item.name if item else "" }}</td>
+            <td class="unit">{{ item.unit if item and item.unit else "-" }}</td>
+            <td class="item">{{ item.name if item else "" }}</td>
           </tr>
           {% for _ in range(11) %}
-          <tr><td class="qty">&nbsp;</td><td>&nbsp;</td></tr>
+          <tr><td class="qty">&nbsp;</td><td class="unit">&nbsp;</td><td class="item">&nbsp;</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -155,15 +158,16 @@
 
       <table class="grid">
         <thead>
-          <tr><th class="qty">Quantity</th><th>Item</th></tr>
+          <tr><th class="qty">Quantity</th><th class="unit">Unit</th><th>Item</th></tr>
         </thead>
         <tbody>
           <tr>
             <td class="qty">{{ transaction.quantity }}</td>
-            <td>{{ item.name if item else "" }}</td>
+            <td class="unit">{{ item.unit if item and item.unit else "-" }}</td>
+            <td class="item">{{ item.name if item else "" }}</td>
           </tr>
           {% for _ in range(11) %}
-          <tr><td class="qty">&nbsp;</td><td>&nbsp;</td></tr>
+          <tr><td class="qty">&nbsp;</td><td class="unit">&nbsp;</td><td class="item">&nbsp;</td></tr>
           {% endfor %}
         </tbody>
       </table>

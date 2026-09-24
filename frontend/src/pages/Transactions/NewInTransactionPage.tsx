@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -50,6 +50,10 @@ export default function NewInTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [printingPdf, setPrintingPdf] = useState(false);
+  const [presetItemLoading, setPresetItemLoading] = useState(!!presetItemId);
+  const submitLock = useRef(false);
+  const printLock = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -64,14 +68,21 @@ export default function NewInTransactionPage() {
   // Hydrate preset item (from "Record IN" deep link).
   useEffect(() => {
     if (presetItemId) {
+      let active = true;
       itemsService
         .getItem(presetItemId)
-        .then(setSelectedItem)
-        .catch(() => undefined);
+        .then((item) => active && setSelectedItem(item))
+        .catch(() => undefined)
+        .finally(() => active && setPresetItemLoading(false));
+      return () => {
+        active = false;
+      };
     }
   }, [presetItemId]);
 
   async function onSubmit(values: FormValues) {
+    if (submitLock.current || presetItemLoading) return;
+    submitLock.current = true;
     setSubmitting(true);
     try {
       const txn = await transactionsService.createIn({
@@ -89,17 +100,23 @@ export default function NewInTransactionPage() {
           : undefined;
       toast.error(detail ?? "Failed to record stock-in");
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   }
 
   async function printPdf() {
-    if (!createdId) return;
+    if (!createdId || printLock.current) return;
+    printLock.current = true;
+    setPrintingPdf(true);
     try {
       const url = await reportsService.getReceivedForm(createdId);
       setPdfUrl(url);
     } catch {
       toast.error("Failed to generate PDF");
+    } finally {
+      printLock.current = false;
+      setPrintingPdf(false);
     }
   }
 
@@ -113,9 +130,13 @@ export default function NewInTransactionPage() {
                 The receiving transaction was saved successfully.
               </p>
               <div className="flex gap-2">
-                <Button onClick={printPdf}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Print PDF
+                <Button onClick={printPdf} disabled={printingPdf}>
+                  {printingPdf ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-2 h-4 w-4" />
+                  )}
+                  {printingPdf ? "Generating PDF…" : "Print PDF"}
                 </Button>
                 <Button
                   variant="outline"
@@ -157,6 +178,7 @@ export default function NewInTransactionPage() {
                       <FormLabel>Item</FormLabel>
                       <ItemCombobox
                         value={field.value}
+                        disabled={submitting || presetItemLoading}
                         selectedLabel={
                           selectedItem
                             ? `${selectedItem.code} — ${selectedItem.name}`
@@ -167,6 +189,12 @@ export default function NewInTransactionPage() {
                           setSelectedItem(item);
                         }}
                       />
+                      {presetItemLoading && (
+                        <FormDescription className="inline-flex items-center gap-2" role="status" aria-live="polite">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          Loading selected item…
+                        </FormDescription>
+                      )}
                       {selectedItem && (
                         <FormDescription>
                           Current stock: {selectedItem.quantity}{" "}
@@ -258,7 +286,7 @@ export default function NewInTransactionPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting}>
+                  <Button type="submit" disabled={submitting || presetItemLoading}>
                     {submitting && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}

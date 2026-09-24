@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,15 +37,21 @@ export default function EmployeeCombobox({
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState<Signatory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
     setLoading(true);
+    setLoadError(false);
     signatoriesService
       .list()
       .then((rows) => active && setEmployees(rows))
-      .catch(() => active && setEmployees([]))
+      .catch(() => {
+        if (!active) return;
+        setEmployees([]);
+        setLoadError(true);
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -76,12 +82,24 @@ export default function EmployeeCombobox({
             placeholder="Search employee name or unit…"
             value={search}
             onValueChange={setSearch}
+            aria-label="Search employee name or unit"
           />
           <CommandList>
-            <CommandEmpty>
-              {loading ? "Loading employees…" : "No employee found."}
-            </CommandEmpty>
-            <CommandGroup>
+            {(loading || loadError || employees.length === 0) && (
+              <CommandEmpty>
+                {loading ? (
+                  <span className="inline-flex items-center gap-2" role="status" aria-live="polite">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Loading employees…
+                  </span>
+                ) : loadError ? (
+                  "Couldn’t load employees. Close and reopen to retry."
+                ) : (
+                  "No employee found."
+                )}
+              </CommandEmpty>
+            )}
+            {!loading && !loadError && employees.length > 0 && <CommandGroup>
               {employees.map((employee) => (
                 <CommandItem
                   key={employee.id}
@@ -107,7 +125,7 @@ export default function EmployeeCombobox({
                   </span>
                 </CommandItem>
               ))}
-            </CommandGroup>
+            </CommandGroup>}
           </CommandList>
         </Command>
       </PopoverContent>

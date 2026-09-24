@@ -20,6 +20,12 @@ export interface TopItem {
   transaction_count: number;
 }
 
+export interface TopRequestingUnit {
+  unit_name: string;
+  request_count: number;
+  total_quantity: number;
+}
+
 export interface CategoryBreakdown {
   category_id: string | null;
   category_name: string;

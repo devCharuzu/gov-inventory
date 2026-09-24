@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   flexRender,
@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Eye,
   Inbox,
+  Loader2,
   Pencil,
   Plus,
   RotateCcw,
@@ -70,15 +71,24 @@ export default function ItemsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [toDeactivate, setToDeactivate] = useState<Item | null>(null);
   const [toDelete, setToDelete] = useState<Item | null>(null);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const itemsRequestId = useRef(0);
 
   useEffect(() => {
+    let active = true;
     categoriesService
       .getCategories(true)
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then((rows) => active && setCategories(rows))
+      .catch(() => active && setCategories([]))
+      .finally(() => active && setCategoriesLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   const fetchItems = useCallback(() => {
+    const requestId = ++itemsRequestId.current;
     setLoading(true);
     const filters: ItemFilters = {
       page,
@@ -91,17 +101,26 @@ export default function ItemsPage() {
     itemsService
       .getItems(filters)
       .then((res) => {
+        if (requestId !== itemsRequestId.current) return;
         setItems(res.items);
         setTotal(res.total);
       })
-      .catch(() => toast.error("Failed to load items"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (requestId === itemsRequestId.current) toast.error("Failed to load items");
+      })
+      .finally(() => {
+        if (requestId === itemsRequestId.current) setLoading(false);
+      });
   }, [page, search, categoryId, activeOnly, lowStock]);
 
   // Debounce search; immediate for other filters.
   useEffect(() => {
+    setLoading(true);
     const t = setTimeout(fetchItems, 300);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      itemsRequestId.current += 1;
+    };
   }, [fetchItems]);
 
   // Reset to page 1 whenever a filter changes.
@@ -136,15 +155,19 @@ export default function ItemsPage() {
 
   const handleReactivate = useCallback(
     async (item: Item) => {
+      if (reactivatingId) return;
+      setReactivatingId(item.id);
       try {
         await itemsService.updateItem(item.id, { is_active: true });
         toast.success(`Reactivated ${item.code}`);
         fetchItems();
       } catch {
         toast.error("Failed to reactivate item");
+      } finally {
+        setReactivatingId(null);
       }
     },
-    [fetchItems]
+    [fetchItems, reactivatingId]
   );
 
   const columns = useMemo<ColumnDef<Item>[]>(
@@ -202,6 +225,7 @@ export default function ItemsPage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => navigate(`/items/${it.id}/edit`)}
+                  disabled={reactivatingId === it.id}
                   aria-label="Edit"
                 >
                   <Pencil className="h-4 w-4" />
@@ -214,6 +238,7 @@ export default function ItemsPage() {
                     size="icon"
                     className="h-8 w-8 text-amber-600 hover:text-amber-600"
                     onClick={() => setToDeactivate(it)}
+                    disabled={reactivatingId === it.id}
                     aria-label="Deactivate"
                     title="Deactivate (keeps history)"
                   >
@@ -225,10 +250,15 @@ export default function ItemsPage() {
                     size="icon"
                     className="h-8 w-8 text-green-600 hover:text-green-600"
                     onClick={() => handleReactivate(it)}
+                    disabled={reactivatingId !== null}
                     aria-label="Reactivate"
                     title="Reactivate"
                   >
-                    <RotateCcw className="h-4 w-4" />
+                    {reactivatingId === it.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4" />
+                    )}
                   </Button>
                 ))}
               {isAdmin && (
@@ -237,6 +267,7 @@ export default function ItemsPage() {
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => setToDelete(it)}
+                  disabled={reactivatingId === it.id}
                   aria-label="Delete"
                   title="Delete permanently"
                 >
@@ -248,7 +279,7 @@ export default function ItemsPage() {
         },
       },
     ],
-    [navigate, isAdmin, handleReactivate]
+    [navigate, isAdmin, handleReactivate, reactivatingId]
   );
 
   const table = useReactTable({
@@ -285,11 +316,13 @@ export default function ItemsPage() {
             <Select
               value={categoryId}
               onValueChange={(v) => setCategoryId(v ?? undefined)}
+              disabled={categoriesLoading}
             >
               <SelectTrigger className="w-48">
-                <SelectValue placeholder="All categories">
+                <SelectValue placeholder={categoriesLoading ? "Loading categories…" : "All categories"}>
                   {(val) => categories.find((c) => c.id === val)?.name ?? ""}
                 </SelectValue>
+                {categoriesLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />}
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
@@ -306,6 +339,7 @@ export default function ItemsPage() {
                 className="h-8 w-8"
                 onClick={() => setCategoryId(undefined)}
                 aria-label="Clear category filter"
+                disabled={categoriesLoading}
               >
                 <X className="h-4 w-4" />
               </Button>

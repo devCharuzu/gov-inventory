@@ -3,6 +3,7 @@ import type {
   CategoryBreakdown,
   SummaryStats,
   TopItem,
+  TopRequestingUnit,
   TrendDataPoint,
 } from "@/types/analytics.types";
 import type { TransactionType } from "@/types/transaction.types";
@@ -16,6 +17,13 @@ export interface TrendsParams {
 
 export interface TopItemsParams {
   type?: TransactionType;
+  limit?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TopRequestingUnitsParams {
+  year?: number;
   limit?: number;
   start_date?: string;
   end_date?: string;
@@ -51,6 +59,16 @@ export const analyticsService = {
     const { data } = await api.get<TopItem[]>("/analytics/top-items", {
       params,
     });
+    return data;
+  },
+
+  async getTopRequestingUnits(
+    params: TopRequestingUnitsParams = {}
+  ): Promise<TopRequestingUnit[]> {
+    const { data } = await api.get<TopRequestingUnit[]>(
+      "/analytics/top-requesting-units",
+      { params }
+    );
     return data;
   },
 

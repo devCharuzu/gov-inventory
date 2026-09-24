@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -52,8 +52,12 @@ export default function NewOutTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [printingPdf, setPrintingPdf] = useState(false);
+  const [presetItemLoading, setPresetItemLoading] = useState(!!presetItemId);
   const [recipientId, setRecipientId] = useState<string>("");
   const [recipientName, setRecipientName] = useState("");
+  const submitLock = useRef(false);
+  const printLock = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -69,10 +73,15 @@ export default function NewOutTransactionPage() {
 
   useEffect(() => {
     if (presetItemId) {
+      let active = true;
       itemsService
         .getItem(presetItemId)
-        .then(setSelectedItem)
-        .catch(() => undefined);
+        .then((item) => active && setSelectedItem(item))
+        .catch(() => undefined)
+        .finally(() => active && setPresetItemLoading(false));
+      return () => {
+        active = false;
+      };
     }
   }, [presetItemId]);
 
@@ -81,10 +90,12 @@ export default function NewOutTransactionPage() {
   const exceeds = !!selectedItem && typeof quantity === "number" && quantity > available;
 
   async function onSubmit(values: FormValues) {
+    if (submitLock.current || presetItemLoading) return;
     if (exceeds) {
       form.setError("quantity", { message: `Only ${available} in stock` });
       return;
     }
+    submitLock.current = true;
     setSubmitting(true);
     try {
       const txn = await transactionsService.createOut({
@@ -104,17 +115,23 @@ export default function NewOutTransactionPage() {
           : undefined;
       toast.error(detail ?? "Failed to record stock-out");
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   }
 
   async function printPdf() {
-    if (!createdId) return;
+    if (!createdId || printLock.current) return;
+    printLock.current = true;
+    setPrintingPdf(true);
     try {
       const url = await reportsService.getRequestForm(createdId);
       setPdfUrl(url);
     } catch {
       toast.error("Failed to generate PDF");
+    } finally {
+      printLock.current = false;
+      setPrintingPdf(false);
     }
   }
 
@@ -128,9 +145,13 @@ export default function NewOutTransactionPage() {
                 The release transaction was saved successfully.
               </p>
               <div className="flex gap-2">
-                <Button onClick={printPdf}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Print PDF
+                <Button onClick={printPdf} disabled={printingPdf}>
+                  {printingPdf ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-2 h-4 w-4" />
+                  )}
+                  {printingPdf ? "Generating PDF…" : "Print PDF"}
                 </Button>
                 <Button
                   variant="outline"
@@ -172,6 +193,7 @@ export default function NewOutTransactionPage() {
                       <FormLabel>Item</FormLabel>
                       <ItemCombobox
                         value={field.value}
+                        disabled={submitting || presetItemLoading}
                         selectedLabel={
                           selectedItem
                             ? `${selectedItem.code} — ${selectedItem.name}`
@@ -183,6 +205,12 @@ export default function NewOutTransactionPage() {
                           form.trigger("quantity");
                         }}
                       />
+                      {presetItemLoading && (
+                        <FormDescription className="inline-flex items-center gap-2" role="status" aria-live="polite">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          Loading selected item…
+                        </FormDescription>
+                      )}
                       {selectedItem && (
                         <FormDescription>
                           Available: {available} {selectedItem.unit ?? ""}
@@ -336,7 +364,7 @@ export default function NewOutTransactionPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting || exceeds}>
+                  <Button type="submit" disabled={submitting || exceeds || presetItemLoading}>
                     {submitting && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}

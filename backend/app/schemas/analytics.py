@@ -34,6 +34,14 @@ class TopItem(BaseModel):
     transaction_count: int
 
 
+class TopRequestingUnit(BaseModel):
+    """A unit ranked by stock-out request frequency."""
+
+    unit_name: str
+    request_count: int
+    total_quantity: int
+
+
 class StockMovementPoint(BaseModel):
     """Daily in/out movement with a running balance for one item."""
 

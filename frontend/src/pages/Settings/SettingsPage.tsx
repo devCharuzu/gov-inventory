@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Database, Download, Inbox, Loader2, Pencil, Plus, RotateCcw, Trash2, UserCheck, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -108,21 +108,35 @@ function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<User | null>(null);
   const [editRole, setEditRole] = useState<UserRole>("viewer");
   const [editActive, setEditActive] = useState("active");
   const [toDelete, setToDelete] = useState<User | null>(null);
+  const usersRequestId = useRef(0);
 
   const fetchUsers = useCallback(() => {
+    const activeRequest = ++usersRequestId.current;
     setLoading(true);
     authService
       .getUsers(1, 100)
-      .then((res) => setUsers(res.items))
-      .catch(() => toast.error("Failed to load users"))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (activeRequest === usersRequestId.current) setUsers(res.items);
+      })
+      .catch(() => {
+        if (activeRequest === usersRequestId.current) toast.error("Failed to load users");
+      })
+      .finally(() => {
+        if (activeRequest === usersRequestId.current) setLoading(false);
+      });
   }, []);
 
-  useEffect(fetchUsers, [fetchUsers]);
+  useEffect(() => {
+    fetchUsers();
+    return () => {
+      usersRequestId.current += 1;
+    };
+  }, [fetchUsers]);
 
   async function handleCreate(values: UserFormValues) {
     setSubmitting(true);
@@ -174,12 +188,16 @@ function UsersTab() {
   }
 
   async function handleReactivate(u: User) {
+    if (reactivatingId) return;
+    setReactivatingId(u.id);
     try {
       await authService.updateUser(u.id, { is_active: true });
       toast.success(`Reactivated ${u.username}`);
       fetchUsers();
     } catch {
       toast.error("Failed to reactivate user");
+    } finally {
+      setReactivatingId(null);
     }
   }
 
@@ -265,6 +283,7 @@ function UsersTab() {
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => openEdit(u)}
+                          disabled={reactivatingId === u.id}
                           aria-label="Edit"
                         >
                           <Pencil className="h-4 w-4" />
@@ -275,10 +294,15 @@ function UsersTab() {
                             size="icon"
                             className="h-8 w-8 text-green-600 hover:text-green-600"
                             onClick={() => handleReactivate(u)}
+                            disabled={reactivatingId !== null}
                             aria-label="Reactivate"
                             title="Reactivate"
                           >
-                            <RotateCcw className="h-4 w-4" />
+                            {reactivatingId === u.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
                           </Button>
                         )}
                         {!u.is_main_admin && !isSelf && (
@@ -287,6 +311,7 @@ function UsersTab() {
                             size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive"
                             onClick={() => setToDelete(u)}
+                            disabled={reactivatingId === u.id}
                             aria-label="Delete"
                             title="Delete permanently"
                           >
@@ -501,16 +526,22 @@ function AuditTab() {
   const [action, setAction] = useState<string | undefined>(undefined);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const logsRequestId = useRef(0);
 
   useEffect(() => {
+    let active = true;
     authService
       .getUsers(1, 100)
-      .then((res) => setUsers(res.items))
+      .then((res) => active && setUsers(res.items))
       .catch(() => undefined);
-    auditService.getActions().then(setActions).catch(() => undefined);
+    auditService.getActions().then((rows) => active && setActions(rows)).catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   const fetchLogs = useCallback(() => {
+    const activeRequest = ++logsRequestId.current;
     setLoading(true);
     auditService
       .getAuditLogs({
@@ -521,12 +552,23 @@ function AuditTab() {
         page: 1,
         size: 50,
       })
-      .then((res) => setLogs(res.items))
-      .catch(() => toast.error("Failed to load audit log"))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (activeRequest === logsRequestId.current) setLogs(res.items);
+      })
+      .catch(() => {
+        if (activeRequest === logsRequestId.current) toast.error("Failed to load audit log");
+      })
+      .finally(() => {
+        if (activeRequest === logsRequestId.current) setLoading(false);
+      });
   }, [userId, action, start, end]);
 
-  useEffect(fetchLogs, [fetchLogs]);
+  useEffect(() => {
+    fetchLogs();
+    return () => {
+      logsRequestId.current += 1;
+    };
+  }, [fetchLogs]);
 
   function toggleSelect(id: string) {
     setSelected((s) => {
@@ -787,7 +829,11 @@ function BackupTab() {
       </CardHeader>
       <CardContent>
         <Button onClick={handleDownload} disabled={downloading}>
-          <Download className="mr-2 h-4 w-4" />
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
           {downloading ? "Preparing…" : "Download Database Backup"}
         </Button>
       </CardContent>
@@ -804,29 +850,36 @@ function AppInfoTab() {
     items: number;
     transactions: number;
   } | null>(null);
+  const [countsLoading, setCountsLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     Promise.all([
       authService.getUsers(1, 1),
       analyticsService.getSummary(),
       transactionsService.getTransactions({ page: 1, size: 1 }),
     ])
-      .then(([users, summary, txns]) =>
+      .then(([users, summary, txns]) => {
+        if (!active) return;
         setCounts({
           users: users.total,
           items: summary.total_items,
           transactions: txns.total,
-        })
-      )
-      .catch(() => setCounts(null));
+        });
+      })
+      .catch(() => active && setCounts(null))
+      .finally(() => active && setCountsLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   const rows: [string, string][] = [
     ["Application", "Philfida Inventory System"],
     ["Version", "1.0.0"],
-    ["Total Users", counts ? String(counts.users) : "…"],
-    ["Total Items", counts ? String(counts.items) : "…"],
-    ["Total Transactions", counts ? String(counts.transactions) : "…"],
+    ["Total Users", counts ? String(counts.users) : countsLoading ? "…" : "Unavailable"],
+    ["Total Items", counts ? String(counts.items) : countsLoading ? "…" : "Unavailable"],
+    ["Total Transactions", counts ? String(counts.transactions) : countsLoading ? "…" : "Unavailable"],
   ];
 
   return (
@@ -839,7 +892,14 @@ function AppInfoTab() {
           {rows.map(([label, value]) => (
             <div key={label} className="flex justify-between py-2.5">
               <dt className="text-muted-foreground">{label}</dt>
-              <dd className="font-medium">{value}</dd>
+              <dd className="font-medium">
+                {countsLoading && label.startsWith("Total") ? (
+                  <span className="inline-flex items-center gap-2 text-muted-foreground" role="status" aria-live="polite">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    Loading
+                  </span>
+                ) : value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -1013,7 +1073,8 @@ function SignatoriesTab() {
     region: null,
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingRole, setSavingRole] = useState<"certifier_id" | "issuer_id" | null>(null);
+  const signatoriesRequestId = useRef(0);
 
   // Add dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1027,20 +1088,31 @@ function SignatoriesTab() {
   const [toDelete, setToDelete] = useState<Signatory | null>(null);
 
   const fetchAll = useCallback(() => {
+    const activeRequest = ++signatoriesRequestId.current;
     setLoading(true);
     Promise.all([
       signatoriesService.list(),
       signatoriesService.getSettings(),
     ])
       .then(([list, s]) => {
+        if (activeRequest !== signatoriesRequestId.current) return;
         setPeople(list);
         setSettings(s);
       })
-      .catch(() => toast.error("Failed to load signatories"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (activeRequest === signatoriesRequestId.current) toast.error("Failed to load signatories");
+      })
+      .finally(() => {
+        if (activeRequest === signatoriesRequestId.current) setLoading(false);
+      });
   }, []);
 
-  useEffect(fetchAll, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+    return () => {
+      signatoriesRequestId.current += 1;
+    };
+  }, [fetchAll]);
 
   function openAdd() {
     setEditing(null);
@@ -1112,7 +1184,8 @@ function SignatoriesTab() {
     role: "certifier_id" | "issuer_id",
     value: string | null
   ) {
-    setSaving(true);
+    if (savingRole) return;
+    setSavingRole(role);
     try {
       const updated = await signatoriesService.updateSettings({ [role]: value });
       setSettings(updated);
@@ -1120,7 +1193,7 @@ function SignatoriesTab() {
     } catch {
       toast.error("Failed to save selection");
     } finally {
-      setSaving(false);
+      setSavingRole(null);
     }
   }
 
@@ -1158,7 +1231,7 @@ function SignatoriesTab() {
               <Select
                 value={settings.certifier_id ?? undefined}
                 onValueChange={(v) => updateRole("certifier_id", v ?? null)}
-                disabled={saving || loading}
+                disabled={savingRole !== null || loading}
               >
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Select employee…">
@@ -1184,13 +1257,19 @@ function SignatoriesTab() {
                   size="icon"
                   className="h-9 w-9 shrink-0"
                   onClick={() => updateRole("certifier_id", null)}
-                  disabled={saving}
+                  disabled={savingRole !== null}
                   aria-label="Clear certifier"
                 >
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
+            {savingRole === "certifier_id" && (
+              <p className="inline-flex items-center gap-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Saving selection…
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Issued By</Label>
@@ -1198,7 +1277,7 @@ function SignatoriesTab() {
               <Select
                 value={settings.issuer_id ?? undefined}
                 onValueChange={(v) => updateRole("issuer_id", v ?? null)}
-                disabled={saving || loading}
+                disabled={savingRole !== null || loading}
               >
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Select employee…">
@@ -1224,13 +1303,19 @@ function SignatoriesTab() {
                   size="icon"
                   className="h-9 w-9 shrink-0"
                   onClick={() => updateRole("issuer_id", null)}
-                  disabled={saving}
+                  disabled={savingRole !== null}
                   aria-label="Clear issuer"
                 >
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
+            {savingRole === "issuer_id" && (
+              <p className="inline-flex items-center gap-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Saving selection…
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,12 +37,14 @@ export default function ItemCombobox({
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // Fetch active items matching the search term (debounced).
   useEffect(() => {
     if (!open) return;
     let active = true;
     setLoading(true);
+    setLoadError(false);
     const t = setTimeout(() => {
       itemsService
         .getItems({
@@ -52,7 +54,11 @@ export default function ItemCombobox({
           size: 20,
         })
         .then((res) => active && setItems(res.items))
-        .catch(() => active && setItems([]))
+        .catch(() => {
+          if (!active) return;
+          setItems([]);
+          setLoadError(true);
+        })
         .finally(() => active && setLoading(false));
     }, 250);
     return () => {
@@ -85,12 +91,24 @@ export default function ItemCombobox({
             placeholder="Search items…"
             value={search}
             onValueChange={setSearch}
+            aria-label="Search items"
           />
           <CommandList>
-            <CommandEmpty>
-              {loading ? "Searching…" : "No items found."}
-            </CommandEmpty>
-            <CommandGroup>
+            {(loading || loadError || items.length === 0) && (
+              <CommandEmpty>
+                {loading ? (
+                  <span className="inline-flex items-center gap-2" role="status" aria-live="polite">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Searching items…
+                  </span>
+                ) : loadError ? (
+                  "Couldn’t load items. Try searching again."
+                ) : (
+                  "No items found."
+                )}
+              </CommandEmpty>
+            )}
+            {!loading && !loadError && items.length > 0 && <CommandGroup>
               {items.map((item) => (
                 <CommandItem
                   key={item.id}
@@ -117,7 +135,7 @@ export default function ItemCombobox({
                   </span>
                 </CommandItem>
               ))}
-            </CommandGroup>
+            </CommandGroup>}
           </CommandList>
         </Command>
       </PopoverContent>

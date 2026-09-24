@@ -84,6 +84,8 @@ export default function ItemForm({
   onCancel,
 }: ItemFormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState(false);
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemFormSchema),
@@ -100,10 +102,17 @@ export default function ItemForm({
   useEffect(() => {
     // Fetch all categories (not only active) so an item's existing category
     // always resolves to its name in the dropdown when editing.
+    let active = true;
     categoriesService
       .getCategories()
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then((rows) => active && setCategories(rows))
+      .catch(() => {
+        if (active) setCategoriesError(true);
+      })
+      .finally(() => active && setCategoriesLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -149,13 +158,14 @@ export default function ItemForm({
               <Select
                 onValueChange={field.onChange}
                 value={field.value || undefined}
-                disabled={submitting}
+                disabled={submitting || categoriesLoading}
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a category">
+                    <SelectValue placeholder={categoriesLoading ? "Loading categories…" : "Select a category"}>
                       {(val) => categories.find((c) => c.id === val)?.name ?? ""}
                     </SelectValue>
+                    {categoriesLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />}
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -166,6 +176,11 @@ export default function ItemForm({
                   ))}
                 </SelectContent>
               </Select>
+              {categoriesError && (
+                <p className="text-sm text-destructive" role="status">
+                  Couldn’t load categories. Refresh the page and try again.
+                </p>
+              )}
               <FormMessage />
             </FormItem>
           )}

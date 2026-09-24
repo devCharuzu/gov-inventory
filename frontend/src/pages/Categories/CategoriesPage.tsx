@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -56,6 +56,8 @@ export default function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toDeactivate, setToDeactivate] = useState<Category | null>(null);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
+  const rowsRequestId = useRef(0);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -63,15 +65,27 @@ export default function CategoriesPage() {
   });
 
   const fetchRows = useCallback(() => {
+    const requestId = ++rowsRequestId.current;
     setLoading(true);
     categoriesService
       .getCategories()
-      .then(setRows)
-      .catch(() => toast.error("Failed to load categories"))
-      .finally(() => setLoading(false));
+      .then((categories) => {
+        if (requestId === rowsRequestId.current) setRows(categories);
+      })
+      .catch(() => {
+        if (requestId === rowsRequestId.current) toast.error("Failed to load categories");
+      })
+      .finally(() => {
+        if (requestId === rowsRequestId.current) setLoading(false);
+      });
   }, []);
 
-  useEffect(fetchRows, [fetchRows]);
+  useEffect(() => {
+    fetchRows();
+    return () => {
+      rowsRequestId.current += 1;
+    };
+  }, [fetchRows]);
 
   function openAdd() {
     setEditing(null);
@@ -120,12 +134,16 @@ export default function CategoriesPage() {
   }
 
   async function handleReactivate(c: Category) {
+    if (reactivatingId) return;
+    setReactivatingId(c.id);
     try {
       await categoriesService.updateCategory(c.id, { is_active: true });
       toast.success(`Reactivated ${c.name}`);
       fetchRows();
     } catch {
       toast.error("Failed to reactivate category");
+    } finally {
+      setReactivatingId(null);
     }
   }
 
@@ -195,6 +213,7 @@ export default function CategoriesPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => openEdit(c)}
+                            disabled={reactivatingId !== null}
                             aria-label="Edit"
                           >
                             <Pencil className="h-4 w-4" />
@@ -207,6 +226,7 @@ export default function CategoriesPage() {
                               size="icon"
                               className="h-8 w-8 text-destructive"
                               onClick={() => setToDeactivate(c)}
+                              disabled={reactivatingId !== null}
                               aria-label="Deactivate"
                             >
                               <Ban className="h-4 w-4" />
@@ -217,9 +237,14 @@ export default function CategoriesPage() {
                               size="icon"
                               className="h-8 w-8 text-green-600"
                               onClick={() => handleReactivate(c)}
+                              disabled={reactivatingId !== null}
                               aria-label="Reactivate"
                             >
-                              <RotateCcw className="h-4 w-4" />
+                              {reactivatingId === c.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-4 w-4" />
+                              )}
                             </Button>
                           ))}
                       </div>

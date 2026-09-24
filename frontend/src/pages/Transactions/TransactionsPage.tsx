@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Ban,
@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Eye,
   Inbox,
+  Loader2,
   Plus,
   Printer,
   Trash2,
@@ -85,6 +86,7 @@ export default function TransactionsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
 
   const [type, setType] = useState<string | undefined>(undefined);
   const [startDate, setStartDate] = useState("");
@@ -125,6 +127,12 @@ export default function TransactionsPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [selected, setSelected] = useState<Map<string, Transaction>>(new Map());
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectingAllRef = useRef(false);
+  const [exportAction, setExportAction] = useState<"history" | "slips" | null>(null);
+  const exportActionRef = useRef(false);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const deletingSelectedRef = useRef(false);
 
   const buildFilters = useCallback(
     (): TransactionFilters => ({
@@ -145,20 +153,30 @@ export default function TransactionsPage() {
   );
 
   const fetchRows = useCallback(() => {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     transactionsService
       .getTransactions(buildFilters())
       .then((res) => {
+        if (activeRequest !== requestId.current) return;
         setRows(res.items);
         setTotal(res.total);
       })
-      .catch(() => toast.error("Failed to load transactions"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (activeRequest === requestId.current) toast.error("Failed to load transactions");
+      })
+      .finally(() => {
+        if (activeRequest === requestId.current) setLoading(false);
+      });
   }, [buildFilters]);
 
   useEffect(() => {
+    setLoading(true);
     const t = setTimeout(fetchRows, 250);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      requestId.current += 1;
+    };
   }, [fetchRows]);
 
   useEffect(() => {
@@ -195,7 +213,9 @@ export default function TransactionsPage() {
 
   async function handleDeleteSelected() {
     const ids = [...selected.keys()];
-    if (!ids.length) return;
+    if (!ids.length || deletingSelectedRef.current) return;
+    deletingSelectedRef.current = true;
+    setDeletingSelected(true);
     try {
       const res = await transactionsService.bulkDeleteTransactions(ids);
       toast.success(`Deleted ${res.deleted} transaction${res.deleted === 1 ? "" : "s"}`);
@@ -203,6 +223,9 @@ export default function TransactionsPage() {
       fetchRows();
     } catch {
       toast.error("Failed to delete transactions");
+    } finally {
+      deletingSelectedRef.current = false;
+      setDeletingSelected(false);
     }
   }
 
@@ -253,11 +276,14 @@ export default function TransactionsPage() {
   }
 
   async function toggleSelectAllMatching() {
+    if (selectingAllRef.current || loading) return;
     if (selected.size === total) {
       setSelected(new Map());
       return;
     }
 
+    selectingAllRef.current = true;
+    setSelectingAll(true);
     try {
       const filters = { ...buildFilters(), page: 1, size: 100 };
       const firstPage = await transactionsService.getTransactions(filters);
@@ -281,10 +307,16 @@ export default function TransactionsPage() {
       toast.success(`${matchingRows.length} matching transaction${matchingRows.length === 1 ? "" : "s"} selected`);
     } catch {
       toast.error("Could not select all matching transactions");
+    } finally {
+      selectingAllRef.current = false;
+      setSelectingAll(false);
     }
   }
 
   async function exportPdf() {
+    if (exportActionRef.current) return;
+    exportActionRef.current = true;
+    setExportAction("history");
     try {
       const url = await reportsService.getTransactionHistory({
         type: type as TransactionType | undefined,
@@ -302,10 +334,14 @@ export default function TransactionsPage() {
       setPdfUrl(url);
     } catch {
       toast.error("Failed to export PDF");
+    } finally {
+      exportActionRef.current = false;
+      setExportAction(null);
     }
   }
 
   async function exportRequestSlips() {
+    if (exportActionRef.current) return;
     const selectedOut = [...selected.values()].filter(
       (transaction) => transaction.transaction_type === "OUT" && !transaction.voided
     );
@@ -313,6 +349,8 @@ export default function TransactionsPage() {
       toast.info("Select at least one active OUT transaction to print request slips");
       return;
     }
+    exportActionRef.current = true;
+    setExportAction("slips");
     try {
       const url = await reportsService.getRequestForms(
         selectedOut.length
@@ -332,6 +370,9 @@ export default function TransactionsPage() {
       setPdfUrl(url);
     } catch {
       toast.error("No matching stock-out request slips could be generated");
+    } finally {
+      exportActionRef.current = false;
+      setExportAction(null);
     }
   }
 
@@ -349,25 +390,44 @@ export default function TransactionsPage() {
         subtitle="Stock-in and stock-out records"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={exportPdf}>
-              <Printer className="mr-2 h-4 w-4" />
-              {selected.size ? `History PDF (${selected.size})` : "Batch Print History"}
+            <Button variant="outline" onClick={exportPdf} disabled={exportAction !== null}>
+              {exportAction === "history" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Printer className="mr-2 h-4 w-4" />
+              )}
+              {exportAction === "history"
+                ? "Generating PDF…"
+                : selected.size
+                  ? `History PDF (${selected.size})`
+                  : "Batch Print History"}
             </Button>
             {(type === "OUT" || selectedOutCount > 0) && (
-              <Button variant="outline" onClick={exportRequestSlips}>
-                <Printer className="mr-2 h-4 w-4" />
-                {selectedOutCount
-                  ? `OUT Request Slips (${selectedOutCount})`
-                  : "Batch OUT Request Slips"}
+              <Button variant="outline" onClick={exportRequestSlips} disabled={exportAction !== null}>
+                {exportAction === "slips" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Printer className="mr-2 h-4 w-4" />
+                )}
+                {exportAction === "slips"
+                  ? "Generating slips…"
+                  : selectedOutCount
+                    ? `OUT Request Slips (${selectedOutCount})`
+                    : "Batch OUT Request Slips"}
               </Button>
             )}
             {isAdmin && selected.size > 0 && (
               <Button
                 variant="destructive"
                 onClick={handleDeleteSelected}
+                disabled={deletingSelected || exportAction !== null || selectingAll}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete ({selected.size})
+                {deletingSelected ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                {deletingSelected ? "Deleting…" : `Delete (${selected.size})`}
               </Button>
             )}
             {isAdmin && selected.size > 0 && (
@@ -375,6 +435,7 @@ export default function TransactionsPage() {
                 variant="outline"
                 className="text-destructive hover:text-destructive"
                 onClick={() => setConfirmDeleteAll(true)}
+                disabled={deletingSelected || exportAction !== null || selectingAll}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete All
@@ -400,7 +461,7 @@ export default function TransactionsPage() {
       >
         {/* Filters */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <Select value={type} onValueChange={(v) => setType(v ?? undefined)}>
+          <Select value={type} onValueChange={(v) => setType(v ?? undefined)} disabled={selectingAll}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="All types" />
             </SelectTrigger>
@@ -410,11 +471,11 @@ export default function TransactionsPage() {
             </SelectContent>
           </Select>
           {type && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setType(undefined)} aria-label="Clear">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setType(undefined)} aria-label="Clear" disabled={selectingAll}>
               <X className="h-4 w-4" />
             </Button>
           )}
-          <Select value={datePreset} onValueChange={applyPreset}>
+          <Select value={datePreset} onValueChange={applyPreset} disabled={selectingAll}>
             <SelectTrigger className="w-44">
               <SelectValue placeholder="All dates" />
             </SelectTrigger>
@@ -426,7 +487,7 @@ export default function TransactionsPage() {
             </SelectContent>
           </Select>
           {datePreset && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyPreset(null)} aria-label="Clear">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyPreset(null)} aria-label="Clear" disabled={selectingAll}>
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -439,11 +500,13 @@ export default function TransactionsPage() {
               }}
               placeholder="Select date"
               aria-label="Specific date"
+              disabled={selectingAll}
             />
           )}
           <Select
             value={unitFilter || undefined}
             onValueChange={(value) => setUnitFilter(value ?? "")}
+            disabled={selectingAll}
           >
             <SelectTrigger className="w-52">
               <SelectValue placeholder="All units" />
@@ -461,6 +524,7 @@ export default function TransactionsPage() {
               className="h-8 w-8"
               onClick={() => setUnitFilter("")}
               aria-label="Clear unit filter"
+              disabled={selectingAll}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -470,12 +534,14 @@ export default function TransactionsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
+            disabled={selectingAll}
           />
           <Input
             placeholder="Search employee…"
             value={employeeSearch}
             onChange={(e) => setEmployeeSearch(e.target.value)}
             className="max-w-xs"
+            disabled={selectingAll}
           />
           <p className="basis-full text-xs text-muted-foreground">
             Select rows for a manual batch, or leave them unselected to print all matches. Filters include unit and date; selected batches are limited to 250 records.
@@ -485,9 +551,14 @@ export default function TransactionsPage() {
               variant="outline"
               size="sm"
               onClick={toggleSelectAllMatching}
-              disabled={loading || total > 250}
+              disabled={loading || selectingAll || deletingSelected || exportAction !== null || total > 250}
             >
-              {total > 250
+              {selectingAll ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  Selecting matches…
+                </>
+              ) : total > 250
                 ? "Narrow filters to 250 or fewer"
                 : allMatchingSelected
                   ? "Clear selection"
@@ -510,6 +581,7 @@ export default function TransactionsPage() {
                   <Checkbox
                     checked={rows.length > 0 && rows.every((row) => selected.has(row.id))}
                     onCheckedChange={toggleSelectAll}
+                    disabled={loading || selectingAll || exportAction !== null || deletingSelected}
                     aria-label="Select all transactions on this page"
                   />
                 </TableHead>
@@ -553,6 +625,7 @@ export default function TransactionsPage() {
                       <Checkbox
                         checked={selected.has(t.id)}
                         onCheckedChange={() => toggleSelect(t)}
+                        disabled={loading || selectingAll || exportAction !== null || deletingSelected}
                         aria-label={`Select ${t.reference_number}`}
                       />
                     </TableCell>
@@ -611,6 +684,7 @@ export default function TransactionsPage() {
                             size="icon"
                             className="h-8 w-8 text-destructive"
                             onClick={() => setToVoid(t)}
+                            disabled={deletingSelected}
                             aria-label="Void"
                           >
                             <Ban className="h-4 w-4" />
@@ -622,6 +696,7 @@ export default function TransactionsPage() {
                             size="icon"
                             className="h-8 w-8 text-destructive"
                             onClick={() => setToDelete(t)}
+                            disabled={deletingSelected}
                             aria-label="Delete"
                           >
                             <Trash2 className="h-4 w-4" />

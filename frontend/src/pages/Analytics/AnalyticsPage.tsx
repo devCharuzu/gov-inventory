@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
   Download,
   Inbox,
+  Loader2,
   Package,
   type LucideIcon,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -50,6 +52,7 @@ import type {
   CategoryBreakdown,
   SummaryStats,
   TopItem,
+  TopRequestingUnit,
   TrendDataPoint,
 } from "@/types/analytics.types";
 
@@ -75,11 +78,24 @@ interface AnalyticsData {
   trends: TrendDataPoint[];
   topOut: TopItem[];
   topIn: TopItem[];
+  topRequestingUnits: TopRequestingUnit[];
   categories: CategoryBreakdown[];
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - 4 + i).reverse();
+
+function formatDateRangeLabel(startDate: string, endDate: string) {
+  const startHasDifferentYear = startDate.slice(0, 4) !== endDate.slice(0, 4);
+  const formatDate = (value: string, includeYear: boolean) =>
+    new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      ...(includeYear ? { year: "numeric" } : {}),
+    });
+
+  return `${formatDate(startDate, startHasDifferentYear)} – ${formatDate(endDate, true)}`;
+}
 
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("monthly");
@@ -91,16 +107,20 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportLock = useRef(false);
+  const requestId = useRef(0);
 
   const usingRange = !!startDate && !!endDate;
 
   const fetchAll = useCallback(() => {
+    const activeRequest = ++requestId.current;
     setLoading(true);
     setError(false);
     const range = usingRange
       ? {
-          start_date: new Date(startDate).toISOString(),
-          end_date: new Date(endDate).toISOString(),
+          start_date: new Date(`${startDate}T00:00:00`).toISOString(),
+          end_date: new Date(`${endDate}T23:59:59.999`).toISOString(),
         }
       : {};
 
@@ -113,25 +133,53 @@ export default function AnalyticsPage() {
       }),
       analyticsService.getTopItems({ type: "OUT", limit: 10, ...range }),
       analyticsService.getTopItems({ type: "IN", limit: 10, ...range }),
+      analyticsService.getTopRequestingUnits({
+        limit: 5,
+        year: usingRange ? undefined : year,
+        ...range,
+      }),
       analyticsService.getCategoryBreakdown(),
     ])
-      .then(([summary, trends, topOut, topIn, categories]) => {
-        setData({ summary, trends, topOut, topIn, categories });
+      .then(
+        ([summary, trends, topOut, topIn, topRequestingUnits, categories]) => {
+          if (activeRequest !== requestId.current) return;
+          setData({
+            summary,
+            trends,
+            topOut,
+            topIn,
+            topRequestingUnits,
+            categories,
+          });
+        }
+      )
+      .catch(() => {
+        if (activeRequest === requestId.current) setError(true);
       })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (activeRequest === requestId.current) setLoading(false);
+      });
   }, [period, year, startDate, endDate, usingRange]);
 
   useEffect(() => {
     fetchAll();
+    return () => {
+      requestId.current += 1;
+    };
   }, [fetchAll]);
 
   async function exportPdf() {
+    if (exportLock.current) return;
+    exportLock.current = true;
+    setExporting(true);
     try {
       const url = await reportsService.getAnalyticsReport({ period, year });
       setPdfUrl(url);
     } catch {
       toast.error("Failed to export report");
+    } finally {
+      exportLock.current = false;
+      setExporting(false);
     }
   }
 
@@ -141,9 +189,13 @@ export default function AnalyticsPage() {
         title="Analytics"
         subtitle="Inventory movement trends and insights"
         actions={
-          <Button variant="outline" onClick={exportPdf}>
-            <Download className="mr-2 h-4 w-4" />
-            Export Analytics Report PDF
+          <Button variant="outline" onClick={exportPdf} disabled={exporting}>
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            {exporting ? "Generating report…" : "Export Analytics Report PDF"}
           </Button>
         }
       >
@@ -230,7 +282,7 @@ export default function AnalyticsPage() {
                   Stock Movement Trend
                 </CardTitle>
               </CardHeader>
-              <CardContent className="h-80">
+              <CardContent className="h-64">
                 {loading ? (
                   <Skeleton className="h-full w-full" />
                 ) : !data || data.trends.length === 0 ? (
@@ -263,7 +315,7 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <TopItemsChart
                 title="Top 10 Most Released Items"
                 color={ORANGE}
@@ -278,10 +330,21 @@ export default function AnalyticsPage() {
               />
             </div>
 
-            <CategoryChart
-              loading={loading}
-              categories={data?.categories ?? []}
-            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <TopRequestingUnitsCard
+                loading={loading}
+                units={data?.topRequestingUnits ?? []}
+                periodLabel={
+                  usingRange
+                    ? formatDateRangeLabel(startDate, endDate)
+                    : String(year)
+                }
+              />
+              <CategoryChart
+                loading={loading}
+                categories={data?.categories ?? []}
+              />
+            </div>
           </div>
         )}
       </PageWrapper>
@@ -361,7 +424,7 @@ function TopItemsChart({
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="h-80">
+      <CardContent className="h-64">
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : data.length === 0 ? (
@@ -393,6 +456,106 @@ function TopItemsChart({
   );
 }
 
+function TopRequestingUnitsCard({
+  loading,
+  units,
+  periodLabel,
+}: {
+  loading: boolean;
+  units: TopRequestingUnit[];
+  periodLabel: string;
+}) {
+  const maxRequests = units[0]?.request_count ?? 0;
+
+  return (
+    <Card>
+      <CardHeader className="grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0">
+          <CardTitle className="text-base">Most Requested Units</CardTitle>
+          <CardDescription>
+            Units / offices ranked by stock-out request frequency
+          </CardDescription>
+        </div>
+        <span
+          className="max-w-[120px] truncate rounded-full bg-muted px-2.5 py-1 text-right text-xs font-medium text-muted-foreground sm:max-w-[180px]"
+          title={periodLabel}
+        >
+          {periodLabel}
+        </span>
+      </CardHeader>
+      <CardContent className="flex-1">
+        {loading ? (
+          <div className="space-y-5 py-2">
+            {Array.from({ length: 5 }, (_, index) => (
+              <div key={index} className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-2 w-full" />
+              </div>
+            ))}
+          </div>
+        ) : units.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Inbox className="h-8 w-8" />
+            <p className="text-sm text-center">
+              No requests with a recorded unit for this range
+            </p>
+          </div>
+        ) : (
+          <ol className="space-y-2.5 py-1">
+            {units.map((unit, index) => {
+              const barWidth = (unit.request_count / maxRequests) * 100;
+              return (
+                <li key={unit.unit_name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span
+                        className="truncate font-medium"
+                        title={unit.unit_name}
+                      >
+                        {unit.unit_name}
+                      </span>
+                    </div>
+                    <p className="shrink-0 text-right font-semibold tabular-nums">
+                      {unit.request_count.toLocaleString()}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        {unit.request_count === 1 ? "request" : "requests"}
+                      </span>
+                    </p>
+                  </div>
+                  <div
+                    className="ml-[1.875rem] flex items-center gap-2.5"
+                  >
+                    <div
+                      role="progressbar"
+                      aria-label={`${unit.unit_name} request frequency`}
+                      aria-valuemin={0}
+                      aria-valuemax={maxRequests}
+                      aria-valuenow={unit.request_count}
+                      className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className="h-full rounded-full bg-orange-600 transition-[width]"
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {unit.total_quantity.toLocaleString()}{" "}
+                      {unit.total_quantity === 1 ? "item" : "items"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function CategoryChart({
   loading,
   categories,
@@ -409,7 +572,7 @@ function CategoryChart({
       <CardHeader>
         <CardTitle className="text-base">Category Breakdown</CardTitle>
       </CardHeader>
-      <CardContent className="h-80">
+      <CardContent className="h-64">
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : slices.length === 0 ? (

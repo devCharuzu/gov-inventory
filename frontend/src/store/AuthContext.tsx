@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 
 import { TOKEN_KEY } from "@/lib/api";
 import { authService } from "@/lib/services/auth.service";
+import { clearWhatsNewSessionForUser } from "@/lib/whats-new";
 import type { User } from "@/types/auth.types";
 
 interface AuthContextValue {
@@ -64,12 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(username: string, password: string): Promise<void> {
     const res = await authService.login({ username, password });
+    clearWhatsNewSessionForUser(res.user.id);
     localStorage.setItem(TOKEN_KEY, res.access_token);
     setToken(res.access_token);
     setUser(res.user);
   }
 
   function logout(): void {
+    if (user) clearWhatsNewSessionForUser(user.id);
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);

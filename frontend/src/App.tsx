@@ -21,6 +21,7 @@ import { AnalyticsPage } from "@/pages/Analytics";
 import { CategoriesPage } from "@/pages/Categories";
 import { ReportsPage } from "@/pages/Reports";
 import { SettingsPage } from "@/pages/Settings";
+import WhatsNewPage from "@/pages/WhatsNew/WhatsNewPage";
 
 const ENCODER_ROLES = ["encoder", "admin"];
 const ADMIN_ROLES = ["admin"];
@@ -130,6 +131,22 @@ export default function App() {
             element={
               <ProtectedRoute requiredRoles={ADMIN_ROLES}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/whats-new"
+            element={
+              <ProtectedRoute>
+                <WhatsNewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/whats-new/:slug"
+            element={
+              <ProtectedRoute>
+                <WhatsNewPage />
               </ProtectedRoute>
             }
           />

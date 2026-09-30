@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   Settings,
+  Sparkles,
   Tags,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileText },
+  { to: "/settings/whats-new", label: "What's new", icon: Sparkles },
   { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 

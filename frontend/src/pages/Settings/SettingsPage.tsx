@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, Inbox, Loader2, Pencil, Plus, RotateCcw, Trash2, UserCheck, X } from "lucide-react";
+import { Database, Download, Inbox, Loader2, Pencil, Plus, RotateCcw, Sparkles, Trash2, UserCheck, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -7,6 +7,7 @@ import { AppLayout, PageWrapper } from "@/components/layout";
 import { ConfirmDialog, DateInput, StatusBadge } from "@/components/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -55,9 +56,19 @@ import type { Signatory, SignatorySettings } from "@/types/signatory.types";
 import UserForm, { type UserFormValues } from "./UserForm";
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   return (
     <AppLayout>
-      <PageWrapper title="Settings" subtitle="System administration">
+      <PageWrapper
+        title="Settings"
+        subtitle="System administration"
+        actions={
+          <Button variant="outline" onClick={() => navigate("/settings/whats-new")}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            What's new
+          </Button>
+        }
+      >
         <Tabs defaultValue="users">
           <TabsList>
             <TabsTrigger value="profile">My Profile</TabsTrigger>

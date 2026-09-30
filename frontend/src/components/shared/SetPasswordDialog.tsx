@@ -21,7 +21,11 @@ import { useAuth } from "@/store/AuthContext";
  * temporary issued password. Dismissible ("Later"), but reappears on every
  * login until a real password is set.
  */
-export default function SetPasswordDialog() {
+export default function SetPasswordDialog({
+  onDismiss,
+}: {
+  onDismiss?: () => void;
+}) {
   const { user, setUser } = useAuth();
   const [dismissed, setDismissed] = useState(false);
   const [current, setCurrent] = useState("");
@@ -47,6 +51,7 @@ export default function SetPasswordDialog() {
       await authService.changePassword(current, pw);
       if (user) setUser({ ...user, must_change_password: false });
       toast.success("Password set — use it the next time you sign in.");
+      onDismiss?.();
     } catch (err) {
       const detail = (
         err as { response?: { data?: { detail?: string } } }
@@ -58,7 +63,15 @@ export default function SetPasswordDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && setDismissed(true)}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setDismissed(true);
+          onDismiss?.();
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -108,7 +121,10 @@ export default function SetPasswordDialog() {
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              setDismissed(true);
+              onDismiss?.();
+            }}
             disabled={saving}
           >
             Later

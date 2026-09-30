@@ -187,6 +187,7 @@ export default function ReportsPage() {
   const [histItem, setHistItem] = useState<Item | null>(null);
   const [histEmployee, setHistEmployee] = useState("");
   const [histUnit, setHistUnit] = useState("");
+  const [stockCardItem, setStockCardItem] = useState<Item | null>(null);
   // Stored documents tab
   const [stored, setStored] = useState<StoredReport[]>([]);
   const [storedLoading, setStoredLoading] = useState(true);
@@ -281,6 +282,7 @@ export default function ReportsPage() {
       ? new Date(`${dateFilter.end}T23:59:59.999`).toISOString()
       : undefined,
   };
+  const invalidDateRange = !!dateFilter.start && !!dateFilter.end && dateFilter.start > dateFilter.end;
 
   // Stored-doc helpers
   function toggleSelect(name: string) {
@@ -349,6 +351,38 @@ export default function ReportsPage() {
             <DateFilterBar value={dateFilter} onChange={setDateFilter} />
 
             <div className="grid gap-6 lg:grid-cols-2">
+              <ReportCard
+                title="Stock Card"
+                description="Appendix 38 · Receipts, issues, and running balances on long bond paper (8.5 × 13 in)."
+              >
+                <div className="space-y-2">
+                  <Label>Item</Label>
+                  <ItemCombobox
+                    value={stockCardItem?.id}
+                    selectedLabel={stockCardItem ? `${stockCardItem.code} — ${stockCardItem.name}` : undefined}
+                    onSelect={setStockCardItem}
+                    includeInactive
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Uses the date filter above. Earlier stock is included in the opening balance.
+                </p>
+                {invalidDateRange && <p className="text-sm text-destructive" role="alert">Start date must be on or before end date.</p>}
+                <ReportActions
+                  disabled={!stockCardItem || invalidDateRange}
+                  actionKey="stock-card"
+                  activeAction={activeReportAction}
+                  onPreview={() => stockCardItem && preview(
+                    () => reportsService.getStockCard({ item_id: stockCardItem.id, ...dateParams }),
+                    "stock-card-preview"
+                  )}
+                  onDownload={() => stockCardItem && download(
+                    () => reportsService.getStockCard({ item_id: stockCardItem.id, ...dateParams }),
+                    `stock-card-${stockCardItem.code}.pdf`,
+                    "stock-card-download"
+                  )}
+                />
+              </ReportCard>
               {/* Request Form (OUT) */}
               <ReportCard
                 title="Request Form"

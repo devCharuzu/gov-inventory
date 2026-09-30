@@ -23,6 +23,7 @@ from app.routers.analytics import top_items as analytics_top_items
 from app.routers.analytics import trends as analytics_trends
 from app.services import report_files
 from app.services.pdf_service import render_html_to_pdf, render_template_to_pdf
+from app.services.stock_card import build_stock_card
 from app.utils.security import get_current_user, require_role
 
 
@@ -219,7 +220,22 @@ def received_form(
             "prepared_by_position": None,
         },
     )
-    return _pdf_response(pdf, f"received-form-{txn.reference_number}.pdf")
+    return _pdf_response(pdf, f"received-form-{report_files._safe_name(txn.reference_number)}")
+
+
+@router.get("/stock-card")
+def stock_card(
+    item_id: uuid.UUID,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """Render the selected item's Appendix 38 stock card on long bond paper."""
+    context = build_stock_card(db, item_id, start_date=start_date, end_date=end_date)
+    context["region"] = _get_region(db)
+    pdf = render_template_to_pdf("stock_card.html", context)
+    return _pdf_response(pdf, f"stock-card-{item_id}.pdf")
 
 
 _REPORT_CSS = """

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stock Card - {{ item.code }}</title>
+  <style>
+    @page {
+      size: 8.5in 13in;
+      margin: 0.5in 0.55in 0.65in;
+      @bottom-left {
+        content: "For Property Office Use\A AO 6/15/02";
+        white-space: pre;
+        font-family: "Times New Roman", Georgia, serif;
+        font-size: 10pt;
+        font-style: italic;
+        vertical-align: top;
+        padding-top: 6pt;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: "Times New Roman", Georgia, serif;
+        font-size: 8pt;
+        vertical-align: top;
+        padding-top: 6pt;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 11pt "Times New Roman", Georgia, serif; color: #000; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #000; padding: 2pt 3pt; overflow-wrap: anywhere; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+    .appendix td { border: 0; text-align: right; padding: 0 5pt 4pt; font-size: 10pt; }
+    .heading { text-align: center; padding: 12pt 5pt 8pt; font-weight: normal; }
+    .title { font-size: 14pt; font-weight: bold; margin-bottom: 2pt; }
+    .agency { font-size: 10.5pt; font-weight: bold; text-transform: uppercase; }
+    .agency-label { margin-top: 3pt; }
+    .period { font-size: 9pt; margin-top: 4pt; }
+    .meta { text-align: left; vertical-align: top; font-weight: normal; }
+    .value { min-height: 22pt; padding-top: 6pt; }
+    .item-name { font-weight: bold; }
+    .description { font-size: 10pt; }
+    .unit { text-align: center; padding-top: 4pt; }
+    .column-head th { text-align: center; vertical-align: middle; padding: 1pt 2pt; font-size: 10.5pt; }
+    .group { font-style: italic; }
+    tbody td { height: 20pt; vertical-align: middle; line-height: 1.1; }
+    .num { text-align: center; }
+    .reference { font-size: 10pt; }
+  </style>
+</head>
+<body>
+  <table>
+    <colgroup>
+      <col style="width:9%"><col style="width:19%"><col style="width:10%">
+      <col style="width:10%"><col style="width:25%"><col style="width:11%"><col style="width:16%">
+    </colgroup>
+    <thead>
+      <tr class="appendix"><td colspan="7">Appendix 38</td></tr>
+      <tr><th colspan="7" class="heading">
+        <div class="title">STOCK CARD</div>
+        <div class="agency">Philippine Fiber Industry Development Authority - {{ region }}</div>
+        <div class="agency-label">Agency</div>
+        {% if period %}<div class="period">{{ period }}</div>{% endif %}
+      </th></tr>
+      <tr>
+        <th colspan="3" rowspan="2" class="meta">Item:<div class="value item-name">{{ item.name }}</div></th>
+        <th colspan="2" rowspan="2" class="meta">Description:
+          {% if item.description %}<div class="description">{{ item.description }}</div>{% endif %}
+          <div class="value unit">{{ item.unit or '' }}</div>
+        </th>
+        <th colspan="2" class="meta">Stock No: {{ item.code }}</th>
+      </tr>
+      <tr><th colspan="2" class="meta">Re-order Point: {{ item.minimum_quantity }}</th></tr>
+      <tr class="column-head">
+        <th rowspan="2">Date</th><th rowspan="2">Reference</th><th class="group">Receipt</th>
+        <th colspan="2" class="group">Issuance</th><th class="group">Balance</th>
+        <th rowspan="2">No. of Days to<br>Consume</th>
+      </tr>
+      <tr class="column-head"><th>Qty.</th><th>Qty.</th><th>Office</th><th>Qty.</th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.date }}</td><td class="reference">{{ row.reference }}</td>
+        <td class="num">{{ row.receipt }}</td><td class="num">{{ row.issue }}</td>
+        <td>{{ row.office }}</td><td class="num">{{ row.balance }}</td><td></td>
+      </tr>
+      {% endfor %}
+      {% for _ in range(blank_rows) %}
+      <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

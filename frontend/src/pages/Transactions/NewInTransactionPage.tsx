@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AxiosError } from "axios";
+import { format } from "date-fns";
 import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +30,11 @@ import type { Item } from "@/types/item.types";
 
 const schema = z.object({
   item_id: z.string().min(1, "Item is required"),
+  reference_number: z.string().trim()
+    .min(1, "Reference number is required")
+    .max(50, "Use at most 50 characters")
+    .refine((value) => !value.toUpperCase().startsWith("REL-"), "REL- is reserved for stock-out references")
+    .refine((value) => !Array.from(value).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127), "Use a single-line reference number"),
   quantity: z
     .number({ message: "Quantity is required" })
     .int("Whole numbers only")
@@ -39,7 +45,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => format(new Date(), "yyyy-MM-dd");
 
 export default function NewInTransactionPage() {
   const navigate = useNavigate();
@@ -50,7 +56,8 @@ export default function NewInTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [printingPdf, setPrintingPdf] = useState(false);
+  const [printingPdf, setPrintingPdf] = useState<"receipt" | "stock-card" | null>(null);
+  const [pdfTitle, setPdfTitle] = useState("Receiving Report");
   const [presetItemLoading, setPresetItemLoading] = useState(!!presetItemId);
   const submitLock = useRef(false);
   const printLock = useRef(false);
@@ -59,6 +66,7 @@ export default function NewInTransactionPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       item_id: presetItemId,
+      reference_number: "",
       quantity: undefined as unknown as number,
       transaction_date: today(),
       remarks: "",
@@ -87,6 +95,7 @@ export default function NewInTransactionPage() {
     try {
       const txn = await transactionsService.createIn({
         item_id: values.item_id,
+        reference_number: values.reference_number,
         quantity: values.quantity,
         transaction_date: new Date(values.transaction_date).toISOString(),
         remarks: values.remarks || undefined,
@@ -94,10 +103,11 @@ export default function NewInTransactionPage() {
       setCreatedId(txn.id);
       toast.success(`Stock-in recorded — ${txn.reference_number}`);
     } catch (err) {
-      const detail =
-        err instanceof AxiosError
-          ? (err.response?.data?.detail as string | undefined)
-          : undefined;
+      const responseDetail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
+      const detail = typeof responseDetail === "string" ? responseDetail : undefined;
+      if (err instanceof AxiosError && err.response?.status === 409) {
+        form.setError("reference_number", { message: detail ?? "Reference already recorded" }, { shouldFocus: true });
+      }
       toast.error(detail ?? "Failed to record stock-in");
     } finally {
       submitLock.current = false;
@@ -105,18 +115,21 @@ export default function NewInTransactionPage() {
     }
   }
 
-  async function printPdf() {
+  async function printPdf(kind: "receipt" | "stock-card") {
     if (!createdId || printLock.current) return;
     printLock.current = true;
-    setPrintingPdf(true);
+    setPrintingPdf(kind);
     try {
-      const url = await reportsService.getReceivedForm(createdId);
+      const url = kind === "stock-card"
+        ? await reportsService.getStockCard({ item_id: form.getValues("item_id") })
+        : await reportsService.getReceivedForm(createdId);
+      setPdfTitle(kind === "stock-card" ? "Stock Card · 8.5 × 13 in" : "Receiving Report");
       setPdfUrl(url);
     } catch {
       toast.error("Failed to generate PDF");
     } finally {
       printLock.current = false;
-      setPrintingPdf(false);
+      setPrintingPdf(null);
     }
   }
 
@@ -129,14 +142,18 @@ export default function NewInTransactionPage() {
               <p className="text-sm text-muted-foreground">
                 The receiving transaction was saved successfully.
               </p>
-              <div className="flex gap-2">
-                <Button onClick={printPdf} disabled={printingPdf}>
-                  {printingPdf ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => printPdf("receipt")} disabled={printingPdf !== null}>
+                  {printingPdf === "receipt" ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <FileText className="mr-2 h-4 w-4" />
                   )}
-                  {printingPdf ? "Generating PDF…" : "Print PDF"}
+                  {printingPdf === "receipt" ? "Generating PDF…" : "Receiving PDF"}
+                </Button>
+                <Button variant="outline" onClick={() => printPdf("stock-card")} disabled={printingPdf !== null}>
+                  {printingPdf === "stock-card" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                  {printingPdf === "stock-card" ? "Generating PDF…" : "Stock Card PDF"}
                 </Button>
                 <Button
                   variant="outline"
@@ -151,7 +168,7 @@ export default function NewInTransactionPage() {
         <PdfDialog
           url={pdfUrl}
           onOpenChange={(o) => !o && setPdfUrl(null)}
-          title="Receiving Report"
+          title={pdfTitle}
         />
       </AppLayout>
     );
@@ -252,16 +269,20 @@ export default function NewInTransactionPage() {
                   />
                 </div>
 
-                <FormItem>
-                  <FormLabel>Reference No.</FormLabel>
-                  <FormControl>
-                    <Input
-                      readOnly
-                      value="Auto-generated (RCV-YYYY-XXXX)"
-                      className="bg-muted text-muted-foreground"
-                    />
-                  </FormControl>
-                </FormItem>
+                <FormField
+                  control={form.control}
+                  name="reference_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reference No.</FormLabel>
+                      <FormControl>
+                        <Input {...field} maxLength={50} placeholder="e.g. PO-2026-06-0059" disabled={submitting} />
+                      </FormControl>
+                      <FormDescription>Enter the purchase order or receiving document reference. This appears on the stock card.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}

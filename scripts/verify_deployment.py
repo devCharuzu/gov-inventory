@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 from dotenv import dotenv_values
 from sqlalchemy import create_engine, text
+from app.services.report_files import _safe_name
 
 config = dotenv_values(ROOT / "backend/.env")
 base = sys.argv[1].rstrip("/")
@@ -77,6 +78,8 @@ try:
     item_id = item["id"]
     for path, quantity in [("in", 20), ("out", 5)]:
         payload = {"item_id": item_id, "quantity": quantity}
+        if path == "in":
+            payload["reference_number"] = "VERIFY-" + uuid.uuid4().hex
         if path == "out":
             payload["recipient_name"] = "Verification Employee"
         txn = call("/api/transactions/" + path, "POST", payload, expected=201)
@@ -94,9 +97,10 @@ try:
         "/api/reports/transaction-history?recipient_name=Verification%20Employee"
     )
     assert batch_pdf.startswith(b"%PDF")
+    assert call("/api/reports/stock-card?item_id=" + item_id).startswith(b"%PDF")
     reports = call("/api/reports/files")
     for reference in references:
-        name = reference + ".pdf"
+        name = _safe_name(reference)
         assert any(r["name"] == name for r in reports), "Missing generated PDF"
         assert call("/api/reports/files/" + name).startswith(b"%PDF")
     backup = call("/api/backup/download")
@@ -114,7 +118,7 @@ finally:
                 {"region_id": r13_region_id},
             )
             for reference in references:
-                connection.execute(text("DELETE FROM report_documents WHERE name=:name"), {"name": reference + ".pdf"})
+                connection.execute(text("DELETE FROM report_documents WHERE name=:name"), {"name": _safe_name(reference)})
             for entity_id in transaction_ids + ([item_id] if item_id else []) + [category_id]:
                 connection.execute(text("DELETE FROM audit_logs WHERE entity_id=:id"), {"id": entity_id})
             if item_id:

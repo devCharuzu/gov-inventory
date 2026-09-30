@@ -19,6 +19,12 @@ export interface AnalyticsReportParams {
   end_date?: string;
 }
 
+export interface StockCardParams {
+  item_id: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface StoredReport {
   name: string;
   size: number;
@@ -27,7 +33,7 @@ export interface StoredReport {
 
 async function fetchPdfUrl(
   url: string,
-  params?: TransactionHistoryParams | AnalyticsReportParams
+  params?: TransactionHistoryParams | AnalyticsReportParams | StockCardParams
 ): Promise<string> {
   const { data } = await api.get<Blob>(url, {
     params,
@@ -38,6 +44,11 @@ async function fetchPdfUrl(
 }
 
 export const reportsService = {
+  /** Live Appendix 38 stock card with receipt, issue, and running balances. */
+  getStockCard(params: StockCardParams): Promise<string> {
+    return fetchPdfUrl("/reports/stock-card", params);
+  },
+
   /** Returns an object URL for the requisition/issue slip PDF (OUT txn). */
   getRequestForm(transactionId: string): Promise<string> {
     return fetchPdfUrl(`/reports/request-form/${transactionId}`);

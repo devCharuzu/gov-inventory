@@ -67,6 +67,38 @@ This reads credentials from the ignored environment file, tests stock and PDF
 workflows, and removes its temporary records. Login audit entries and allocated
 document numbers are retained.
 
+## Stock cards and receipt references
+
+Record Stock-In now requires a manual reference (up to 50 characters), such as
+`PO-2026-06-0059`. References must be unique within the regional office, including
+voided records. The `REL-` prefix remains reserved for automatic stock-out
+references. Existing receipt references remain unchanged; no database migration
+is required. Clients posting to `/api/transactions/in` must send
+`reference_number` with the existing item and quantity fields.
+
+After receiving stock, use **Stock Card PDF**, or go to **Reports → Generate →
+Stock Card**, choose an item, and use the existing date filter. Cards use the
+attached Appendix 38 layout on **8.5 × 13-inch long bond paper**. Reference numbers
+appear on receipt rows; issue rows show the receiving office (or employee if no
+office is recorded). The days-to-consume column stays blank because the system
+does not record a consumption estimate.
+
+The PDF is generated from the item's current stock and non-voided transactions
+each time it is opened. Receipts add stock and issues subtract it. A card with no
+transactions in the selected period is blank; the item's initial quantity is
+not printed as a transaction. When activity exists, the first transaction's
+balance carries the item's starting stock forward, and earlier movements are
+included when a date filter is used. Permanently deleted movements cannot be
+shown. Dates are displayed in Asia/Manila time; equal transaction dates use
+creation time and ID for stable ordering. Headers and footers repeat on
+additional pages.
+
+Run the isolated stock-card checks (in-memory fixtures only):
+
+```bash
+DATABASE_URL=sqlite:// ENVIRONMENT=test AUTO_CREATE_SCHEMA=false PYTHONPATH=backend backend/venv/bin/python -m unittest discover -s backend/tests -v
+```
+
 ## Vercel deployment
 
 The Vercel project must use the repository root as its Root Directory. The committed `vercel.json` installs and builds the frontend from `frontend/`, while `api/index.py` exposes the FastAPI API under `/api/*`.

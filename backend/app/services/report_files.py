@@ -5,6 +5,7 @@ restarts. The same path works with local SQLite for development.
 """
 
 import re
+import hashlib
 import logging
 import uuid as _uuid
 from datetime import datetime, timezone
@@ -44,7 +45,12 @@ def _get_region(db: Session, region_id) -> str:
 
 def _safe_name(reference_number: str) -> str:
     """Sanitize a reference number into a safe filename."""
-    return re.sub(r"[^A-Za-z0-9._-]", "_", reference_number) + ".pdf"
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", reference_number)
+    # Preserve existing generated filenames. Manual references can contain
+    # spaces, slashes, or Unicode; distinguish references that sanitize alike.
+    if not re.fullmatch(r"(?:RCV|REL)-[0-9]{4}-[0-9]+", reference_number):
+        safe += "-" + hashlib.sha256(reference_number.encode()).hexdigest()[:16]
+    return safe + ".pdf"
 
 
 def build_transaction_pdf(db: Session, txn: Transaction) -> bytes:

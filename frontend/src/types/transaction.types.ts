@@ -24,6 +24,7 @@ export interface Transaction {
 
 export interface CreateInRequest {
   item_id: string;
+  reference_number: string;
   quantity: number;
   condition?: string;
   transaction_date: string;

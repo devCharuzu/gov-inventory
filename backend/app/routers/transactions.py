@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -156,9 +157,14 @@ def stock_in(
     """Record a stock-in transaction and increase item quantity."""
     item = _get_item_or_404(db, payload.item_id, lock=True)
 
+    if db.query(Transaction.id).filter(
+        Transaction.reference_number == payload.reference_number
+    ).first():
+        raise HTTPException(status_code=409, detail="This reference number is already recorded. Enter a unique receipt reference.")
+
     txn = Transaction(
         transaction_type=TransactionType.IN,
-        reference_number=_next_reference(db, TransactionType.IN),
+        reference_number=payload.reference_number,
         item_id=item.id,
         quantity=payload.quantity,
         condition=payload.condition,
@@ -170,7 +176,16 @@ def stock_in(
     )
     item.quantity += payload.quantity
     db.add_all([txn, item])
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # The database constraint also covers simultaneous submissions.
+        if db.query(Transaction.id).filter(
+            Transaction.reference_number == payload.reference_number
+        ).first():
+            raise HTTPException(status_code=409, detail="This reference number is already recorded. Enter a unique receipt reference.")
+        raise
     db.refresh(txn)
     _audit(
         db,

@@ -23,6 +23,7 @@ interface ItemComboboxProps {
   value?: string;
   selectedLabel?: string;
   disabled?: boolean;
+  includeInactive?: boolean;
   /** Bubbles the full item so the parent can show current stock. */
   onSelect: (item: Item) => void;
 }
@@ -31,6 +32,7 @@ export default function ItemCombobox({
   value,
   selectedLabel,
   disabled,
+  includeInactive = false,
   onSelect,
 }: ItemComboboxProps) {
   const [open, setOpen] = useState(false);
@@ -49,7 +51,7 @@ export default function ItemCombobox({
       itemsService
         .getItems({
           search: search || undefined,
-          is_active: true,
+          is_active: includeInactive ? undefined : true,
           page: 1,
           size: 20,
         })
@@ -65,7 +67,7 @@ export default function ItemCombobox({
       active = false;
       clearTimeout(t);
     };
-  }, [search, open]);
+  }, [search, open, includeInactive]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

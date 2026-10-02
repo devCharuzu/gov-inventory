@@ -409,7 +409,7 @@ export default function ReportsPage() {
                     outTxn &&
                     download(
                       () => reportsService.getRequestForm(outTxn.id),
-                      `request-form-${outTxn.reference_number}.pdf`,
+                      `request-form-${outTxn.reference_number ?? outTxn.id}.pdf`,
                       "request-form-download"
                     )
                   }
@@ -442,7 +442,7 @@ export default function ReportsPage() {
                     inTxn &&
                     download(
                       () => reportsService.getReceivedForm(inTxn.id),
-                      `received-form-${inTxn.reference_number}.pdf`,
+                      `received-form-${inTxn.reference_number ?? inTxn.id}.pdf`,
                       "received-form-download"
                     )
                   }

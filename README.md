@@ -69,12 +69,20 @@ document numbers are retained.
 
 ## Stock cards and receipt references
 
-Record Stock-In now requires a manual reference (up to 50 characters), such as
-`PO-2026-06-0059`. References must be unique within the regional office, including
-voided records. The `REL-` prefix remains reserved for automatic stock-out
-references. Existing receipt references remain unchanged; no database migration
-is required. Clients posting to `/api/transactions/in` must send
+Record Stock-In accepts an optional manual reference (up to 50 characters), such
+as `PO-2026-06-0059`. Items received in one batch may reuse the same reference;
+the form warns when that reference is already in use. The `REL-` prefix remains
+reserved for automatic stock-out references, which stay unique within the
+regional office. Clients posting to `/api/transactions/in` may omit
 `reference_number` with the existing item and quantity fields.
+
+Before deploying this behavior to an existing Supabase database, apply
+`supabase/migrations/20261002053157_allow_optional_repeated_stock_in_references.sql`.
+It allows blank and repeated receipt references while retaining unique stock-out
+references within each region.
+
+Transactions also supports **Date range** with starting and ending dates. Both
+selected days are included, and the same bounds apply to PDF exports.
 
 After receiving stock, use **Stock Card PDF**, or go to **Reports → Generate →
 Stock Card**, choose an item, and use the existing date filter. Cards use the

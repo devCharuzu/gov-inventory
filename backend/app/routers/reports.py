@@ -220,7 +220,10 @@ def received_form(
             "prepared_by_position": None,
         },
     )
-    return _pdf_response(pdf, f"received-form-{report_files._safe_name(txn.reference_number)}")
+    return _pdf_response(
+        pdf,
+        f"received-form-{report_files._safe_name(txn.reference_number, txn.id)}",
+    )
 
 
 @router.get("/stock-card")

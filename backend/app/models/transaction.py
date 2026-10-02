@@ -9,11 +9,12 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
-    UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,7 +40,9 @@ class Transaction(Base, RegionScopedMixin, TimestampMixin):
     transaction_type: Mapped[TransactionType] = mapped_column(
         Enum(TransactionType), nullable=False
     )
-    reference_number: Mapped[str] = mapped_column(String(50), index=True)
+    reference_number: Mapped[str | None] = mapped_column(
+        String(50), index=True, nullable=True
+    )
     item_id: Mapped[uuid.UUID] = mapped_column(
         SAUuid, ForeignKey("items.id"), nullable=False
     )
@@ -62,10 +65,17 @@ class Transaction(Base, RegionScopedMixin, TimestampMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_transactions_region_out_reference",
             "region_id",
             "reference_number",
-            name="uq_transactions_region_reference",
+            unique=True,
+            postgresql_where=text(
+                "transaction_type = 'OUT' AND reference_number IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "transaction_type = 'OUT' AND reference_number IS NOT NULL"
+            ),
         ),
     )
 

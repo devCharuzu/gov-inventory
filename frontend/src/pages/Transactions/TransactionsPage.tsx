@@ -61,6 +61,13 @@ import { useAuth } from "@/store/AuthContext";
 import type { Transaction, TransactionType } from "@/types/transaction.types";
 
 const PAGE_SIZE = 15;
+const DATE_PRESET_LABELS: Record<string, string> = {
+  week: "This week",
+  month: "This month",
+  year: "This year",
+  specific: "Specific date",
+  range: "Date range",
+};
 
 function TypeBadge({ type }: { type: TransactionType }) {
   return (
@@ -97,6 +104,7 @@ export default function TransactionsPage() {
   const [unitFilter, setUnitFilter] = useState("");
 
   const iso = (d: Date) => format(d, "yyyy-MM-dd");
+  const invalidDateRange = datePreset === "range" && !!startDate && !!endDate && endDate < startDate;
 
   function applyPreset(value: string | null) {
     const preset = value ?? undefined;
@@ -115,6 +123,8 @@ export default function TransactionsPage() {
       const date = iso(now);
       setStartDate(date);
       setEndDate(date);
+    } else if (preset === "range") {
+      // Preserve existing dates so a preset can be refined as a custom range.
     } else if (!preset) {
       setStartDate("");
       setEndDate("");
@@ -154,6 +164,12 @@ export default function TransactionsPage() {
 
   const fetchRows = useCallback(() => {
     const activeRequest = ++requestId.current;
+    if (invalidDateRange) {
+      setRows([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     transactionsService
       .getTransactions(buildFilters())
@@ -168,7 +184,7 @@ export default function TransactionsPage() {
       .finally(() => {
         if (activeRequest === requestId.current) setLoading(false);
       });
-  }, [buildFilters]);
+  }, [buildFilters, invalidDateRange]);
 
   useEffect(() => {
     setLoading(true);
@@ -188,7 +204,7 @@ export default function TransactionsPage() {
     if (!toVoid) return;
     try {
       await transactionsService.voidTransaction(toVoid.id);
-      toast.success(`Voided ${toVoid.reference_number}`);
+      toast.success(`Voided ${toVoid.reference_number ?? "transaction"}`);
       fetchRows();
     } catch {
       toast.error("Failed to void transaction");
@@ -199,7 +215,7 @@ export default function TransactionsPage() {
     if (!toDelete) return;
     try {
       await transactionsService.hardDeleteTransaction(toDelete.id);
-      toast.success(`Deleted ${toDelete.reference_number}`);
+      toast.success(`Deleted ${toDelete.reference_number ?? "transaction"}`);
       setSelected((previous) => {
         const next = new Map(previous);
         next.delete(toDelete.id);
@@ -390,7 +406,7 @@ export default function TransactionsPage() {
         subtitle="Stock-in and stock-out records"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={exportPdf} disabled={exportAction !== null}>
+            <Button variant="outline" onClick={exportPdf} disabled={exportAction !== null || invalidDateRange}>
               {exportAction === "history" ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
@@ -403,7 +419,7 @@ export default function TransactionsPage() {
                   : "Batch Print History"}
             </Button>
             {(type === "OUT" || selectedOutCount > 0) && (
-              <Button variant="outline" onClick={exportRequestSlips} disabled={exportAction !== null}>
+              <Button variant="outline" onClick={exportRequestSlips} disabled={exportAction !== null || invalidDateRange}>
                 {exportAction === "slips" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
@@ -477,13 +493,16 @@ export default function TransactionsPage() {
           )}
           <Select value={datePreset} onValueChange={applyPreset} disabled={selectingAll}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="All dates" />
+              <SelectValue placeholder="All dates">
+                {datePreset ? DATE_PRESET_LABELS[datePreset] : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="week">This week</SelectItem>
               <SelectItem value="month">This month</SelectItem>
               <SelectItem value="year">This year</SelectItem>
               <SelectItem value="specific">Specific date</SelectItem>
+              <SelectItem value="range">Date range</SelectItem>
             </SelectContent>
           </Select>
           {datePreset && (
@@ -502,6 +521,30 @@ export default function TransactionsPage() {
               aria-label="Specific date"
               disabled={selectingAll}
             />
+          )}
+          {datePreset === "range" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <DateInput
+                value={startDate}
+                onChange={setStartDate}
+                placeholder="Starting date"
+                aria-label="Starting date"
+                disabled={selectingAll}
+              />
+              <span className="text-sm text-muted-foreground">to</span>
+              <DateInput
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="Ending date"
+                aria-label="Ending date"
+                disabled={selectingAll}
+              />
+            </div>
+          )}
+          {invalidDateRange && (
+            <p className="basis-full text-sm text-destructive" role="alert">
+              Ending date must be the same as or later than the starting date.
+            </p>
           )}
           <Select
             value={unitFilter || undefined}
@@ -626,12 +669,12 @@ export default function TransactionsPage() {
                         checked={selected.has(t.id)}
                         onCheckedChange={() => toggleSelect(t)}
                         disabled={loading || selectingAll || exportAction !== null || deletingSelected}
-                        aria-label={`Select ${t.reference_number}`}
+                        aria-label={`Select ${t.reference_number ?? "transaction without reference"}`}
                       />
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       <span className={t.voided ? "text-muted-foreground line-through" : ""}>
-                        {t.reference_number}
+                        {t.reference_number ?? "—"}
                       </span>
                       {t.voided && (
                         <Badge
@@ -744,7 +787,7 @@ export default function TransactionsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Transaction {viewing?.reference_number}
+              Transaction {viewing?.reference_number ?? "—"}
             </DialogTitle>
           </DialogHeader>
           {viewing && (
@@ -794,7 +837,7 @@ export default function TransactionsPage() {
         title="Void transaction?"
         description={
           toVoid
-            ? `${toVoid.reference_number} will be voided and its stock effect reversed. This cannot be undone.`
+            ? `${toVoid.reference_number ?? "This transaction"} will be voided and its stock effect reversed. This cannot be undone.`
             : undefined
         }
         confirmLabel="Void"
@@ -809,7 +852,7 @@ export default function TransactionsPage() {
         title="Delete transaction?"
         description={
           toDelete
-            ? `${toDelete.reference_number} will be permanently deleted and its stock effect reversed if not already voided. This cannot be undone.`
+            ? `${toDelete.reference_number ?? "This transaction"} will be permanently deleted and its stock effect reversed if not already voided. This cannot be undone.`
             : undefined
         }
         confirmLabel="Delete"

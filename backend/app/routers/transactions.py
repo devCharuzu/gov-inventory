@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import or_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -88,6 +87,7 @@ def _get_item_or_404(
 def list_transactions(
     type: TransactionType | None = None,
     item_id: uuid.UUID | None = None,
+    reference_number: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     created_by: uuid.UUID | None = None,
@@ -100,6 +100,12 @@ def list_transactions(
     _: User = Depends(get_current_user),
 ) -> PaginatedTransactions:
     """List transactions with optional filters."""
+    if start_date is not None:
+        start_date = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date.astimezone(timezone.utc)
+    if end_date is not None:
+        end_date = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date.astimezone(timezone.utc)
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="Start date must be on or before end date.")
     page = max(page, 1)
     size = min(max(size, 1), 100)
 
@@ -108,6 +114,8 @@ def list_transactions(
         query = query.filter(Transaction.transaction_type == type)
     if item_id is not None:
         query = query.filter(Transaction.item_id == item_id)
+    if reference_number and reference_number.strip():
+        query = query.filter(Transaction.reference_number == reference_number.strip())
     if start_date is not None:
         query = query.filter(Transaction.transaction_date >= start_date)
     if end_date is not None:
@@ -157,11 +165,6 @@ def stock_in(
     """Record a stock-in transaction and increase item quantity."""
     item = _get_item_or_404(db, payload.item_id, lock=True)
 
-    if db.query(Transaction.id).filter(
-        Transaction.reference_number == payload.reference_number
-    ).first():
-        raise HTTPException(status_code=409, detail="This reference number is already recorded. Enter a unique receipt reference.")
-
     txn = Transaction(
         transaction_type=TransactionType.IN,
         reference_number=payload.reference_number,
@@ -176,16 +179,7 @@ def stock_in(
     )
     item.quantity += payload.quantity
     db.add_all([txn, item])
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        # The database constraint also covers simultaneous submissions.
-        if db.query(Transaction.id).filter(
-            Transaction.reference_number == payload.reference_number
-        ).first():
-            raise HTTPException(status_code=409, detail="This reference number is already recorded. Enter a unique receipt reference.")
-        raise
+    db.commit()
     db.refresh(txn)
     _audit(
         db,
@@ -306,7 +300,9 @@ def bulk_delete_transactions(
                     item.quantity += txn.quantity
                 db.add(item)
         # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
-        report_files.delete_report(db, report_files._safe_name(txn.reference_number))
+        report_files.delete_transaction_report(
+            db, txn.reference_number, txn.id
+        )
         db.delete(txn)
         count += 1
     db.commit()
@@ -394,7 +390,7 @@ def hard_delete_transaction(
     # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
     from app.services import report_files
 
-    report_files.delete_report(db, report_files._safe_name(ref))
+    report_files.delete_transaction_report(db, ref, txn.id)
     db.delete(txn)
     db.commit()
     _audit(db, user=current_user, action="DELETE_TRANSACTION", request=request,

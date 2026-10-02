@@ -72,7 +72,7 @@ def build_stock_card(
         is_receipt = txn.transaction_type == TransactionType.IN
         rows.append({
             "date": _date(date),
-            "reference": txn.reference_number if is_receipt else "",
+            "reference": (txn.reference_number or "") if is_receipt else "",
             "receipt": txn.quantity if is_receipt else "",
             "issue": "" if is_receipt else txn.quantity,
             "office": "" if is_receipt else (txn.recipient_department or txn.recipient_name or ""),

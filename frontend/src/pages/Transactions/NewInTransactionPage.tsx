@@ -31,9 +31,8 @@ import type { Item } from "@/types/item.types";
 const schema = z.object({
   item_id: z.string().min(1, "Item is required"),
   reference_number: z.string().trim()
-    .min(1, "Reference number is required")
     .max(50, "Use at most 50 characters")
-    .refine((value) => !value.toUpperCase().startsWith("REL-"), "REL- is reserved for stock-out references")
+    .refine((value) => !value || !value.toUpperCase().startsWith("REL-"), "REL- is reserved for stock-out references")
     .refine((value) => !Array.from(value).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127), "Use a single-line reference number"),
   quantity: z
     .number({ message: "Quantity is required" })
@@ -59,6 +58,7 @@ export default function NewInTransactionPage() {
   const [printingPdf, setPrintingPdf] = useState<"receipt" | "stock-card" | null>(null);
   const [pdfTitle, setPdfTitle] = useState("Receiving Report");
   const [presetItemLoading, setPresetItemLoading] = useState(!!presetItemId);
+  const [duplicateReference, setDuplicateReference] = useState(false);
   const submitLock = useRef(false);
   const printLock = useRef(false);
 
@@ -72,6 +72,26 @@ export default function NewInTransactionPage() {
       remarks: "",
     },
   });
+  const referenceNumber = form.watch("reference_number");
+
+  useEffect(() => {
+    const normalized = referenceNumber.trim();
+    setDuplicateReference(false);
+    if (!normalized) return;
+
+    let active = true;
+    const timer = setTimeout(() => {
+      transactionsService
+        .getTransactions({ type: "IN", reference_number: normalized, page: 1, size: 1 })
+        .then((result) => active && setDuplicateReference(result.total > 0))
+        .catch(() => active && setDuplicateReference(false));
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [referenceNumber]);
 
   // Hydrate preset item (from "Record IN" deep link).
   useEffect(() => {
@@ -95,19 +115,16 @@ export default function NewInTransactionPage() {
     try {
       const txn = await transactionsService.createIn({
         item_id: values.item_id,
-        reference_number: values.reference_number,
+        reference_number: values.reference_number || undefined,
         quantity: values.quantity,
         transaction_date: new Date(values.transaction_date).toISOString(),
         remarks: values.remarks || undefined,
       });
       setCreatedId(txn.id);
-      toast.success(`Stock-in recorded — ${txn.reference_number}`);
+      toast.success(`Stock-in recorded${txn.reference_number ? ` — ${txn.reference_number}` : ""}`);
     } catch (err) {
       const responseDetail = err instanceof AxiosError ? err.response?.data?.detail : undefined;
       const detail = typeof responseDetail === "string" ? responseDetail : undefined;
-      if (err instanceof AxiosError && err.response?.status === 409) {
-        form.setError("reference_number", { message: detail ?? "Reference already recorded" }, { shouldFocus: true });
-      }
       toast.error(detail ?? "Failed to record stock-in");
     } finally {
       submitLock.current = false;
@@ -278,7 +295,12 @@ export default function NewInTransactionPage() {
                       <FormControl>
                         <Input {...field} maxLength={50} placeholder="e.g. PO-2026-06-0059" disabled={submitting} />
                       </FormControl>
-                      <FormDescription>Enter the purchase order or receiving document reference. This appears on the stock card.</FormDescription>
+                      <FormDescription>Optional. Use the same reference for items received in one batch.</FormDescription>
+                      {duplicateReference && (
+                        <p role="status" aria-live="polite" className="text-sm text-amber-700">
+                          You're duplicating your reference number. Make sure it’s for the same batch.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

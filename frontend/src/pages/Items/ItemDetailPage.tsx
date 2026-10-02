@@ -205,7 +205,7 @@ export default function ItemDetailPage() {
                   {txns.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-mono text-xs">
-                        {t.reference_number}
+                        {t.reference_number ?? "—"}
                       </TableCell>
                       <TableCell>
                         <Badge

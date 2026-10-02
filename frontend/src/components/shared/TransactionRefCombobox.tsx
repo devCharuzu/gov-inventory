@@ -58,7 +58,8 @@ export default function TransactionRefCombobox({
 
   const filtered = search
     ? rows.filter((t) =>
-        t.reference_number.toLowerCase().includes(search.toLowerCase())
+        [t.reference_number ?? "No reference number", t.item?.name, t.item?.code]
+          .join(" ").toLowerCase().includes(search.toLowerCase())
       )
     : rows;
 
@@ -85,10 +86,10 @@ export default function TransactionRefCombobox({
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search reference no…"
+            placeholder="Search reference or item…"
             value={search}
             onValueChange={setSearch}
-            aria-label="Search transaction reference"
+            aria-label="Search transaction reference or item"
           />
           <CommandList>
             {(loading || loadError || filtered.length === 0) && (
@@ -112,7 +113,7 @@ export default function TransactionRefCombobox({
                   value={t.id}
                   onSelect={() => {
                     onSelect(t);
-                    setSelectedRef(t.reference_number);
+                    setSelectedRef(t.reference_number ?? "No reference number");
                     setOpen(false);
                   }}
                 >
@@ -123,7 +124,7 @@ export default function TransactionRefCombobox({
                     )}
                   />
                   <span className="flex-1 truncate font-mono text-xs">
-                    {t.reference_number}
+                    {t.reference_number ?? "No reference number"}
                   </span>
                   <span className="ml-2 truncate text-xs text-muted-foreground">
                     {t.item?.name ?? ""}

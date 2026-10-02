@@ -6,7 +6,7 @@ export type TransactionType = "IN" | "OUT";
 export interface Transaction {
   id: string;
   transaction_type: TransactionType;
-  reference_number: string;
+  reference_number: string | null;
   item_id: string;
   item: Item;
   quantity: number;
@@ -24,7 +24,7 @@ export interface Transaction {
 
 export interface CreateInRequest {
   item_id: string;
-  reference_number: string;
+  reference_number?: string;
   quantity: number;
   condition?: string;
   transaction_date: string;

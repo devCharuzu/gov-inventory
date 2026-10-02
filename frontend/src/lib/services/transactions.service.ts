@@ -10,6 +10,7 @@ import type {
 export interface TransactionFilters {
   type?: TransactionType;
   item_id?: string;
+  reference_number?: string;
   start_date?: string;
   end_date?: string;
   created_by?: string;

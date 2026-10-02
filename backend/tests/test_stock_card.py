@@ -8,15 +8,16 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 # Register the same regional scoping hooks used by application requests.
 from app import database  # noqa: F401
-from app.models import Base, Item, Region, Transaction, TransactionType, User
-from app.routers.transactions import stock_in, stock_out
+from app.models import Base, Item, Region, ReportDocument, Transaction, TransactionType, User
+from app.routers.transactions import hard_delete_transaction, list_transactions, stock_in, stock_out
 from app.schemas.transaction import StockInCreate, StockOutCreate
 from app.services.pdf_service import _env, _weasyprint_html, TEMPLATES_DIR
-from app.services.report_files import _safe_name
+from app.services.report_files import _safe_name, get_report, save_transaction_report
 from app.services.stock_card import build_stock_card
 
 
@@ -119,23 +120,125 @@ class StockCardTests(unittest.TestCase):
         self.assertEqual(result.exception.status_code, 422)
 
     @patch("app.routers.transactions.save_transaction_report")
-    def test_manual_receipt_is_saved_and_duplicate_does_not_increase_stock(self, _save_pdf):
+    def test_duplicate_batch_reference_is_allowed_and_increases_stock(self, _save_pdf):
         payload = StockInCreate(item_id=self.item.id, reference_number="  PO-2026-06-0059  ", quantity=15)
         txn = stock_in(payload, request=None, current_user=self.user, db=self.db)
         self.assertEqual(txn.reference_number, "PO-2026-06-0059")
         self.assertEqual(self.item.quantity, 68)
-        with self.assertRaises(HTTPException) as result:
-            stock_in(payload, request=None, current_user=self.user, db=self.db)
-        self.assertEqual(result.exception.status_code, 409)
-        self.assertEqual(self.item.quantity, 68)
-        self.assertEqual(self.db.query(Transaction).count(), 1)
+        duplicate = stock_in(payload, request=None, current_user=self.user, db=self.db)
+        self.assertEqual(duplicate.reference_number, "PO-2026-06-0059")
+        self.assertEqual(self.item.quantity, 83)
+        self.assertEqual(self.db.query(Transaction).count(), 2)
+
+    @patch("app.routers.transactions.save_transaction_report")
+    def test_reference_is_optional(self, _save_pdf):
+        payload = StockInCreate(item_id=self.item.id, quantity=2)
+        txn = stock_in(payload, request=None, current_user=self.user, db=self.db)
+        self.assertIsNone(txn.reference_number)
+        self.assertEqual(self.item.quantity, 55)
+        self.assertIsNone(
+            StockInCreate(
+                item_id=self.item.id, quantity=1, reference_number="  "
+            ).reference_number
+        )
 
     def test_reference_validation(self):
-        for reference in ["", "   ", "a" * 51, "PO\n123", "REL-2026-0001"]:
+        for reference in ["a" * 51, "PO\n123", "REL-2026-0001"]:
             with self.subTest(reference=reference), self.assertRaises(ValidationError):
                 StockInCreate(item_id=self.item.id, quantity=1, reference_number=reference)
-        with self.assertRaises(ValidationError):
-            StockInCreate(item_id=self.item.id, quantity=1)
+
+    @patch("app.routers.transactions.save_transaction_report")
+    def test_blank_reference_stays_blank_on_stock_card(self, _save_pdf):
+        stock_in(StockInCreate(item_id=self.item.id, quantity=2), request=None, current_user=self.user, db=self.db)
+        card = build_stock_card(self.db, self.item.id)
+        self.assertEqual(card["rows"][0]["reference"], "")
+        self.assertEqual(card["rows"][0]["receipt"], 2)
+        self.assertEqual(card["closing_balance"], 55)
+
+    def test_reference_lookup_is_exact_and_scoped_to_region(self):
+        first = self.movement(1, TransactionType.IN, 2, reference="BATCH-1")
+        second = self.movement(2, TransactionType.IN, 3, reference="BATCH-1")
+        self.movement(3, TransactionType.IN, 1, reference="BATCH-10")
+        result = list_transactions(type=TransactionType.IN, reference_number=" BATCH-1 ", db=self.db)
+        self.assertEqual({t.id for t in result.items}, {first.id, second.id})
+        self.db.info["region_id"] = uuid.uuid4()
+        self.assertEqual(list_transactions(reference_number="BATCH-1", db=self.db).total, 0)
+
+    def test_transaction_date_range_includes_both_days_and_combines_filters(self):
+        times = ["2026-06-01T15:59:59.999+00:00", "2026-06-01T16:00:00+00:00",
+                 "2026-06-02T15:59:59.999+00:00", "2026-06-02T16:00:00+00:00"]
+        txns = []
+        for i, value in enumerate(times):
+            txn = self.movement(i + 1, TransactionType.IN, 1)
+            txn.transaction_date = datetime.fromisoformat(value)
+            txns.append(txn)
+        self.db.commit()
+        start = datetime.fromisoformat("2026-06-02T00:00:00+08:00")
+        end = datetime.fromisoformat("2026-06-02T23:59:59.999+08:00")
+        result = list_transactions(start_date=start, end_date=end, type=TransactionType.IN,
+                                   item_id=self.item.id, size=1, db=self.db)
+        self.assertEqual(result.total, 2)
+        self.assertEqual([t.id for t in result.items], [txns[2].id])
+        result = list_transactions(start_date=start, end_date=end, page=2, size=1, db=self.db)
+        self.assertEqual([t.id for t in result.items], [txns[1].id])
+        self.assertEqual(list_transactions(start_date=start, db=self.db).total, 3)
+        self.assertEqual(list_transactions(end_date=end, db=self.db).total, 3)
+        with self.assertRaises(HTTPException) as error:
+            list_transactions(start_date=end, end_date=start, db=self.db)
+        self.assertEqual(error.exception.status_code, 422)
+
+    @patch("app.services.report_files.build_transaction_pdf", return_value=b"test PDF")
+    def test_shared_reference_reports_remain_separate_and_legacy_is_preserved(self, _pdf):
+        original = self.movement(1, TransactionType.IN, 2, reference="BATCH-1")
+        original.created_at = date(1)
+        duplicate = self.movement(2, TransactionType.IN, 3, reference="BATCH-1")
+        duplicate.created_at = date(2)
+        legacy_name = _safe_name("BATCH-1")
+        self.db.add(ReportDocument(name=legacy_name, content=b"legacy", size=6))
+        self.db.commit()
+        duplicate_name = save_transaction_report(self.db, duplicate)
+        self.assertIsNotNone(duplicate_name)
+        self.assertIsNotNone(get_report(self.db, legacy_name))
+        hard_delete_transaction(duplicate.id, request=None, current_user=self.user, db=self.db)
+        self.assertIsNone(get_report(self.db, duplicate_name))
+        self.assertIsNotNone(get_report(self.db, legacy_name))
+        self.assertEqual(self.item.quantity, 55)
+        original_name = save_transaction_report(self.db, original)
+        self.assertIsNotNone(get_report(self.db, original_name))
+        self.assertIsNone(get_report(self.db, legacy_name))
+        self.assertEqual(save_transaction_report(self.db, original), original_name)
+        self.assertEqual(self.db.query(ReportDocument).count(), 1)
+
+    @patch("app.services.report_files.build_transaction_pdf", return_value=b"test PDF")
+    def test_two_batch_receipts_and_blank_receipts_have_distinct_reports(self, _pdf):
+        first = self.movement(1, TransactionType.IN, 2, reference="BATCH-1")
+        second = self.movement(2, TransactionType.IN, 3, reference="BATCH-1")
+        third = self.movement(3, TransactionType.IN, 1)
+        third.reference_number = None
+        fourth = self.movement(4, TransactionType.IN, 1)
+        fourth.reference_number = None
+        self.db.commit()
+        names = [save_transaction_report(self.db, txn) for txn in [first, second, third, fourth]]
+        self.assertNotIn(None, names)
+        self.assertEqual(len(set(names)), 4)
+        hard_delete_transaction(first.id, request=None, current_user=self.user, db=self.db)
+        self.assertIsNone(get_report(self.db, names[0]))
+        for name in names[1:]:
+            self.assertIsNotNone(get_report(self.db, name))
+
+    def test_stock_out_references_remain_unique(self):
+        self.movement(1, TransactionType.OUT, 1, reference="REL-2026-0001")
+        duplicate = Transaction(
+            item_id=self.item.id,
+            created_by=self.user.id,
+            transaction_type=TransactionType.OUT,
+            quantity=1,
+            transaction_date=date(2),
+            reference_number="REL-2026-0001",
+        )
+        self.db.add(duplicate)
+        with self.assertRaises(IntegrityError):
+            self.db.flush()
 
     @patch("app.routers.transactions.save_transaction_report")
     def test_actual_transaction_routes_update_the_stock_card(self, _save_pdf):
@@ -196,6 +299,11 @@ class StockCardTests(unittest.TestCase):
         self.assertNotEqual(_safe_name("PO/123"), _safe_name("PO_123"))
         self.assertEqual(_safe_name("RCV-2026-0001"), "RCV-2026-0001.pdf")
         self.assertTrue(_safe_name('PO-ñ/"123').isascii())
+        self.assertNotEqual(
+            _safe_name("PO-2026-06-0059", uuid.uuid4()),
+            _safe_name("PO-2026-06-0059", uuid.uuid4()),
+        )
+        self.assertNotEqual(_safe_name(None, uuid.uuid4()), _safe_name(None, uuid.uuid4()))
 
 
 if __name__ == "__main__":

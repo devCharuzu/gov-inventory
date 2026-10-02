@@ -14,7 +14,7 @@ class StockInCreate(BaseModel):
     """Payload for recording a stock-in (received) transaction."""
 
     item_id: uuid.UUID
-    reference_number: str = Field(min_length=1, max_length=50)
+    reference_number: str | None = Field(default=None, max_length=50)
     quantity: int = Field(gt=0)
     condition: str | None = None
     purpose: str | None = None
@@ -24,8 +24,12 @@ class StockInCreate(BaseModel):
     @field_validator("reference_number", mode="before")
     @classmethod
     def validate_reference(cls, value):
+        if value is None:
+            return None
         if isinstance(value, str):
             value = value.strip()
+            if not value:
+                return None
             if any(ord(char) < 32 or ord(char) == 127 for char in value):
                 raise ValueError("Reference number must not contain control characters")
             if value.upper().startswith("REL-"):
@@ -53,7 +57,7 @@ class TransactionOut(BaseModel):
 
     id: uuid.UUID
     transaction_type: TransactionType
-    reference_number: str
+    reference_number: str | None
     item_id: uuid.UUID
     quantity: int
     recipient_name: str | None = None

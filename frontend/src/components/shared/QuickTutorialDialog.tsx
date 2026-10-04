@@ -27,10 +27,10 @@ export default function QuickTutorialDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(90vh,760px)] max-w-xl overflow-y-auto p-0"
+        className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto p-0"
         showCloseButton={false}
       >
-        <div className="relative overflow-hidden rounded-t-xl bg-primary px-8 pb-8 pt-8 text-primary-foreground">
+        <div className="relative overflow-hidden rounded-t-xl bg-primary px-8 pb-6 pt-6 text-primary-foreground">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -right-8 -top-12 h-40 w-40 rounded-full border-[24px] border-white/10"
@@ -68,11 +68,11 @@ export default function QuickTutorialDialog({
           </DialogHeader>
         </div>
 
-        <div className="space-y-6 px-8 py-7">
+        <div className="space-y-5 px-8 py-6">
           <section aria-labelledby="quick-guide-steps-title">
             <h2
               id="quick-guide-steps-title"
-              className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+              className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
               Start with these three steps
             </h2>
@@ -109,7 +109,7 @@ export default function QuickTutorialDialog({
             </p>
           </div>
 
-          <div className="flex justify-end border-t pt-5">
+          <div className="flex justify-end border-t pt-4">
             <Button onClick={() => onOpenChange(false)}>
               Got it
               <CheckCircle2 className="ml-2 h-4 w-4" />
@@ -134,7 +134,7 @@ function GuideStep({
 }) {
   return (
     <div className="min-w-0 rounded-xl border bg-card p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
           {number}
         </span>

@@ -176,6 +176,7 @@
 
 /* Sleek page transition on navigation. The wrapper is re-keyed per route in
    AppLayout so the animation replays on every page change. */
+/* Build trigger: settings UI batch (2026-10-04). */
 @keyframes page-enter {
   from {
     opacity: 0;

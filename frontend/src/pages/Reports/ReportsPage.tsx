@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CalendarDays,
+  ClipboardList,
   Download,
   Eye,
+  FileDown,
   FileText,
+  FileUp,
   Inbox,
   Loader2,
+  Printer,
   Search,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   endOfMonth,
@@ -107,38 +113,41 @@ function DateFilterBar({
   }
 
   return (
-    <div className="rounded-lg border bg-muted/40 p-4">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Date Range
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        {(["week", "month", "year", "custom"] as DatePreset[]).map((p) => (
-          <button
-            key={p}
-            onClick={() => applyPreset(p)}
-            className={cn(
-              "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-              value.preset === p
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {PRESET_LABELS[p]}
-          </button>
-        ))}
-        {value.preset && (
-          <button
-            onClick={clear}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-3 w-3" />
-            Clear
-          </button>
-        )}
+    <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/[0.08] via-primary/[0.03] to-transparent px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+          <CalendarDays className="h-4 w-4" />
+          Date Range
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(["week", "month", "year", "custom"] as DatePreset[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => applyPreset(p)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-[13px] font-medium transition-colors",
+                value.preset === p
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {PRESET_LABELS[p]}
+            </button>
+          ))}
+          {value.preset && (
+            <button
+              onClick={clear}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {value.preset === "custom" && (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="mt-2.5 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Label className="text-xs">From</Label>
             <DateInput
@@ -334,7 +343,7 @@ export default function ReportsPage() {
         subtitle="Generate and view official PDF documents"
       >
         <Tabs defaultValue="generate">
-          <TabsList className="mb-6">
+          <TabsList className="mb-5">
             <TabsTrigger value="generate">
               <FileText className="mr-2 h-4 w-4" />
               Generate
@@ -346,16 +355,17 @@ export default function ReportsPage() {
           </TabsList>
 
           {/* ── Generate tab ─────────────────────────────────────────────── */}
-          <TabsContent value="generate" className="space-y-6">
+          <TabsContent value="generate" className="space-y-5">
             {/* Centralized date filter */}
             <DateFilterBar value={dateFilter} onChange={setDateFilter} />
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <ReportCard
+                icon={ClipboardList}
                 title="Stock Card"
                 description="Appendix 38 · Receipts, issues, and running balances on long bond paper (8.5 × 13 in)."
               >
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Item</Label>
                   <ItemCombobox
                     value={stockCardItem?.id}
@@ -385,10 +395,11 @@ export default function ReportsPage() {
               </ReportCard>
               {/* Request Form (OUT) */}
               <ReportCard
+                icon={FileUp}
                 title="Request Form"
                 description="Requisition & issue slip for a stock-out transaction."
               >
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Release Transaction</Label>
                   <TransactionRefCombobox
                     type="OUT"
@@ -418,10 +429,11 @@ export default function ReportsPage() {
 
               {/* Received Form (IN) */}
               <ReportCard
+                icon={FileDown}
                 title="Received Form"
                 description="Inventory receiving report for a stock-in transaction."
               >
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Receiving Transaction</Label>
                   <TransactionRefCombobox
                     type="IN"
@@ -451,10 +463,11 @@ export default function ReportsPage() {
 
               {/* Transaction History */}
               <ReportCard
+                icon={Printer}
                 title="Batch Print Transactions"
                 description="Print a filtered transaction list for a week, month, date, or employee."
               >
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Type</Label>
                   <div className="flex items-center gap-2">
                     <Select
@@ -481,7 +494,7 @@ export default function ReportsPage() {
                     )}
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Item (optional)</Label>
                   <ItemCombobox
                     value={histItem?.id}
@@ -491,7 +504,7 @@ export default function ReportsPage() {
                     onSelect={setHistItem}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Employee (optional)</Label>
                   <Input
                     value={histEmployee}
@@ -499,7 +512,7 @@ export default function ReportsPage() {
                     placeholder="Search employee / recipient"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Unit (optional)</Label>
                   <Select
                     value={histUnit || undefined}
@@ -562,11 +575,11 @@ export default function ReportsPage() {
           {/* ── Documents tab ────────────────────────────────────────────── */}
           <TabsContent value="documents">
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <FileText className="h-4 w-4" />
+                      <FileText className="h-4 w-4 text-primary" />
                       Stored Transaction Documents
                     </CardTitle>
                     <CardDescription className="mt-1">
@@ -615,7 +628,7 @@ export default function ReportsPage() {
                     ))}
                   </div>
                 ) : filteredStored.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
                     <Inbox className="h-8 w-8" />
                     <p className="text-sm">
                       {search ? "No documents match your search" : "No stored documents yet"}
@@ -641,12 +654,15 @@ export default function ReportsPage() {
                     </div>
                     <ul className="divide-y">
                       {filteredStored.map((f) => (
-                        <li key={f.name} className="flex items-center gap-3 py-2.5">
+                        <li key={f.name} className="flex items-center gap-3 py-2">
                           <Checkbox
                             checked={selected.has(f.name)}
                             onCheckedChange={() => toggleSelect(f.name)}
                             aria-label={`Select ${f.name}`}
                           />
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                            <FileText className="h-4 w-4" />
+                          </span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-mono text-sm">{f.name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -748,22 +764,28 @@ export default function ReportsPage() {
 function ReportCard({
   title,
   description,
+  icon: Icon,
   children,
 }: {
   title: string;
   description: string;
+  icon: LucideIcon;
   children: React.ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-md">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="h-4 w-4 text-muted-foreground" />
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 pt-0.5">
+            <CardTitle className="text-[15px] tracking-tight">{title}</CardTitle>
+            <CardDescription className="mt-0.5 text-[13px] leading-snug">{description}</CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      <CardContent className="space-y-3">{children}</CardContent>
     </Card>
   );
 }
@@ -795,7 +817,7 @@ function ReportActions({
         {activeAction === `${actionKey}-download` ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
         ) : (
-          <Download className="mr-2 h-4 w-4" />
+          <Download className="h-4 w-4" />
         )}
         {activeAction === `${actionKey}-download` ? "Preparing…" : "Download"}
       </Button>

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/shared";
+
 interface PageWrapperProps {
   title: string;
   subtitle?: string;
@@ -22,7 +24,10 @@ export default function PageWrapper({
             <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {actions}
+        </div>
       </header>
       {children}
     </div>

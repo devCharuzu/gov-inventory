@@ -130,3 +130,46 @@
     @apply font-sans;
     }
 }
+
+/* Smooth, eye-friendly theme switching. The `theme-transition` class is added
+   to <html> for a split second while the theme flips, then removed. */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    fill 0.35s ease,
+    stroke 0.35s ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition: none !important;
+  }
+}
+
+/* Recharts elements follow the active theme instead of hardcoded grays. */
+.recharts-cartesian-grid line {
+  stroke: var(--border);
+}
+.recharts-cartesian-axis-tick text {
+  fill: var(--muted-foreground);
+}
+.recharts-legend-item-text {
+  color: var(--muted-foreground) !important;
+}
+.recharts-default-tooltip {
+  background-color: var(--popover) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md);
+}
+.recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item {
+  color: var(--popover-foreground) !important;
+}

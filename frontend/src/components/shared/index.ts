@@ -8,3 +8,4 @@ export { default as EmployeeCombobox } from "./EmployeeCombobox";
 export { default as TransactionRefCombobox } from "./TransactionRefCombobox";
 export { default as PDFPreview } from "./PDFPreview";
 export { default as PdfDialog } from "./PdfDialog";
+export { default as ThemeToggle } from "./ThemeToggle";

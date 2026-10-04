@@ -4,8 +4,11 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
+  BarChart3,
+  History,
   Inbox,
   Package,
+  PieChart as PieChartIcon,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -124,16 +127,16 @@ export default function DashboardPage() {
             </AlertDescription>
           </Alert>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <KpiRow loading={loading} summary={data?.summary} />
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <MovementChart loading={loading} trends={data?.trends ?? []} />
               <CategoryChart
                 loading={loading}
                 categories={data?.categories ?? []}
               />
             </div>
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <RecentTransactions
                 loading={loading}
                 transactions={data?.recent ?? []}
@@ -154,14 +157,14 @@ interface KpiDef {
   key: keyof SummaryStats;
   label: string;
   icon: LucideIcon;
-  color: string;
+  tile: string;
 }
 
 const KPIS: KpiDef[] = [
-  { key: "total_items", label: "Total Items", icon: Package, color: "text-blue-600" },
-  { key: "total_in_today", label: "In Today", icon: ArrowDownCircle, color: "text-green-600" },
-  { key: "total_out_today", label: "Out Today", icon: ArrowUpCircle, color: "text-orange-600" },
-  { key: "low_stock_count", label: "Low Stock", icon: AlertTriangle, color: "text-red-600" },
+  { key: "total_items", label: "Total Items", icon: Package, tile: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  { key: "total_in_today", label: "In Today", icon: ArrowDownCircle, tile: "bg-green-500/10 text-green-600 dark:text-green-400" },
+  { key: "total_out_today", label: "Out Today", icon: ArrowUpCircle, tile: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
+  { key: "low_stock_count", label: "Low Stock", icon: AlertTriangle, tile: "bg-red-500/10 text-red-600 dark:text-red-400" },
 ];
 
 function KpiRow({
@@ -173,20 +176,22 @@ function KpiRow({
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {KPIS.map(({ key, label, icon: Icon, color }) => (
-        <Card key={key}>
-          <CardContent className="flex items-center justify-between p-6">
-            <div>
-              <p className="text-sm text-muted-foreground">{label}</p>
+      {KPIS.map(({ key, label, icon: Icon, tile }) => (
+        <Card key={key} className="overflow-hidden transition-shadow hover:shadow-md">
+          <CardContent className="flex items-center gap-3.5 p-4">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tile}`}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
               {loading ? (
                 <Skeleton className="mt-2 h-8 w-16" />
               ) : (
-                <p className="mt-1 text-3xl font-bold">
+                <p className="mt-0.5 text-2xl font-bold tracking-tight">
                   {summary ? summary[key] : 0}
                 </p>
               )}
             </div>
-            <Icon className={`h-8 w-8 ${color}`} />
           </CardContent>
         </Card>
       ))}
@@ -219,10 +224,15 @@ function MovementChart({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Monthly Stock Movement</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <BarChart3 className="h-4 w-4" />
+          </span>
+          <CardTitle className="text-[15px] tracking-tight">Monthly Stock Movement</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent className="h-72">
+      <CardContent className="h-64">
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : last6.length === 0 ? (
@@ -258,10 +268,15 @@ function CategoryChart({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Stock by Category</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <PieChartIcon className="h-4 w-4" />
+          </span>
+          <CardTitle className="text-[15px] tracking-tight">Stock by Category</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent className="h-72">
+      <CardContent className="h-64">
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : slices.length === 0 ? (
@@ -304,8 +319,13 @@ function RecentTransactions({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Recent Transactions</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <History className="h-4 w-4" />
+          </span>
+          <CardTitle className="text-[15px] tracking-tight">Recent Transactions</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -372,8 +392,13 @@ function LowStockList({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Low Stock Items</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:text-red-400">
+            <AlertTriangle className="h-4 w-4" />
+          </span>
+          <CardTitle className="text-[15px] tracking-tight">Low Stock Items</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -390,9 +415,12 @@ function LowStockList({
               <li key={item.id}>
                 <Link
                   to={`/items/${item.id}`}
-                  className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-muted/50"
+                  className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/50"
                 >
-                  <div className="min-w-0">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
+                    <AlertTriangle className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.code}</p>
                   </div>

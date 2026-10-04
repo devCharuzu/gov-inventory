@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 
 import ProtectedRoute from "@/components/shared/ProtectedRoute";
@@ -25,6 +26,32 @@ import WhatsNewPage from "@/pages/WhatsNew/WhatsNewPage";
 
 const ENCODER_ROLES = ["encoder", "admin"];
 const ADMIN_ROLES = ["admin"];
+
+// Keeps toast notifications on the same theme as the app by watching the
+// `dark` class that ThemeToggle flips on <html>.
+function ThemedToaster() {
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light"
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light"
+      );
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return <Toaster richColors position="top-right" theme={theme} />;
+}
 
 export default function App() {
   return (
@@ -154,7 +181,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        <Toaster richColors position="top-right" />
+        <ThemedToaster />
       </AuthProvider>
     </BrowserRouter>
   );

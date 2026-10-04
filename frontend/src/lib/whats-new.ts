@@ -22,6 +22,7 @@ export interface ProductUpdate {
   summary: string;
   publishedAt: string;
   showOnLoginUntil: string;
+  details: Array<{ title: string; description: string }>;
   /** Groups related announcements, e.g. "Design changes". Shown in the modal and archive badges. */
   category?: string;
   /** Optional 3-step visual for the login modal. When absent, the modal keeps its default visual. */

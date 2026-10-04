@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, IdCard, Inbox, Info, Loader2, Pencil, Plus, RotateCcw, ScrollText, Sparkles, Trash2, User, UserCheck, Users, X, type LucideIcon } from "lucide-react";
+import { Database, Download, IdCard, Inbox, Info, Loader2, Pencil, Plus, RotateCcw, ScrollText, Sparkles, Trash2, User as UserIcon, UserCheck, Users, X, type LucideIcon } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ export default function SettingsPage() {
       >
         <Tabs defaultValue="users" orientation="vertical" className="flex flex-col gap-6 md:flex-row">
           <TabsList className="w-full shrink-0 items-stretch gap-1 bg-transparent p-0 md:w-60">
-            <SettingsNavItem value="profile" icon={User} label="My Profile" hint="Account & password" />
+            <SettingsNavItem value="profile" icon={UserIcon} label="My Profile" hint="Account & password" />
             <SettingsNavItem value="users" icon={Users} label="Users" hint="Accounts & roles" />
             <SettingsNavItem value="signatories" icon={IdCard} label="Employees" hint="Signatories & units" />
             <SettingsNavItem value="audit" icon={ScrollText} label="Audit Log" hint="Activity history" />

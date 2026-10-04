@@ -173,3 +173,27 @@
 .recharts-default-tooltip .recharts-tooltip-item {
   color: var(--popover-foreground) !important;
 }
+
+/* Sleek page transition on navigation. The wrapper is re-keyed per route in
+   AppLayout so the animation replays on every page change. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  min-height: 100%;
+  animation: page-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition {
+    animation: none;
+  }
+}

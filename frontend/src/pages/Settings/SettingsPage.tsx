@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Download, Inbox, Loader2, Pencil, Plus, RotateCcw, Sparkles, Trash2, UserCheck, X } from "lucide-react";
+import { Database, Download, IdCard, Inbox, Info, Loader2, Pencil, Plus, RotateCcw, ScrollText, Sparkles, Trash2, User, UserCheck, Users, X, type LucideIcon } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -69,36 +69,65 @@ export default function SettingsPage() {
           </Button>
         }
       >
-        <Tabs defaultValue="users">
-          <TabsList>
-            <TabsTrigger value="profile">My Profile</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="signatories">Employees</TabsTrigger>
-            <TabsTrigger value="audit">Audit Log</TabsTrigger>
-            <TabsTrigger value="backup">Backup</TabsTrigger>
-            <TabsTrigger value="info">App Info</TabsTrigger>
+        <Tabs defaultValue="users" orientation="vertical" className="flex flex-col gap-6 md:flex-row">
+          <TabsList className="w-full shrink-0 items-stretch gap-1 bg-transparent p-0 md:w-60">
+            <SettingsNavItem value="profile" icon={User} label="My Profile" hint="Account & password" />
+            <SettingsNavItem value="users" icon={Users} label="Users" hint="Accounts & roles" />
+            <SettingsNavItem value="signatories" icon={IdCard} label="Employees" hint="Signatories & units" />
+            <SettingsNavItem value="audit" icon={ScrollText} label="Audit Log" hint="Activity history" />
+            <SettingsNavItem value="backup" icon={Database} label="Backup" hint="Download a copy" />
+            <SettingsNavItem value="info" icon={Info} label="App Info" hint="System overview" />
           </TabsList>
-          <TabsContent value="profile" className="mt-6">
-            <ProfileTab />
-          </TabsContent>
-          <TabsContent value="users" className="mt-6">
-            <UsersTab />
-          </TabsContent>
-          <TabsContent value="signatories" className="mt-6">
-            <SignatoriesTab />
-          </TabsContent>
-          <TabsContent value="audit" className="mt-6">
-            <AuditTab />
-          </TabsContent>
-          <TabsContent value="backup" className="mt-6">
-            <BackupTab />
-          </TabsContent>
-          <TabsContent value="info" className="mt-6">
-            <AppInfoTab />
-          </TabsContent>
+          <div className="min-w-0 flex-1">
+            <TabsContent value="profile" className="mt-0">
+              <ProfileTab />
+            </TabsContent>
+            <TabsContent value="users" className="mt-0">
+              <UsersTab />
+            </TabsContent>
+            <TabsContent value="signatories" className="mt-0">
+              <SignatoriesTab />
+            </TabsContent>
+            <TabsContent value="audit" className="mt-0">
+              <AuditTab />
+            </TabsContent>
+            <TabsContent value="backup" className="mt-0">
+              <BackupTab />
+            </TabsContent>
+            <TabsContent value="info" className="mt-0">
+              <AppInfoTab />
+            </TabsContent>
+          </div>
         </Tabs>
       </PageWrapper>
     </AppLayout>
+  );
+}
+
+function SettingsNavItem({
+  value,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  value: string;
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="w-full flex-none justify-start gap-3 rounded-xl px-3 py-2.5 text-left data-active:bg-accent data-active:text-accent-foreground"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+      </span>
+    </TabsTrigger>
   );
 }
 
@@ -205,8 +234,11 @@ function UsersTab() {
       await authService.updateUser(u.id, { is_active: true });
       toast.success(`Reactivated ${u.username}`);
       fetchUsers();
-    } catch {
-      toast.error("Failed to reactivate user");
+    } catch (err) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail;
+      toast.error(detail ?? "Failed to reactivate user");
     } finally {
       setReactivatingId(null);
     }
@@ -1186,8 +1218,11 @@ function SignatoriesTab() {
       await signatoriesService.remove(toDelete.id);
       toast.success(`Removed ${toDelete.full_name}`);
       fetchAll();
-    } catch {
-      toast.error("Failed to remove signatory");
+    } catch (err) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail;
+      toast.error(detail ?? "Failed to remove signatory");
     }
   }
 

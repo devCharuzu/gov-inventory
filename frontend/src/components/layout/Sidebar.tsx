@@ -67,14 +67,19 @@ export default function Sidebar({
       )}
     >
       {/* Header */}
-      <div className="flex h-14 items-center justify-between border-b px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <img
-            src="/philfida-logo.png"
-            alt="PhilFIDA"
-            className="h-8 w-8 shrink-0 object-contain"
-          />
-          {!collapsed && (
+      <div
+        className={cn(
+          "flex h-14 items-center border-b px-3",
+          collapsed ? "justify-center" : "justify-between"
+        )}
+      >
+        {!collapsed && (
+          <div className="flex min-w-0 items-center gap-2">
+            <img
+              src="/philfida-logo.png"
+              alt="PhilFIDA"
+              className="h-8 w-8 shrink-0 object-contain"
+            />
             <div className="min-w-0 leading-tight">
               <p className="truncate text-base font-bold tracking-tight text-primary">
                 PhilFIDA
@@ -83,8 +88,8 @@ export default function Sidebar({
                 Inventory System
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="icon"

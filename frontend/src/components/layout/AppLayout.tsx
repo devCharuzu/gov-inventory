@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import QuickTutorialDialog from "@/components/shared/QuickTutorialDialog";
 import SetPasswordDialog from "@/components/shared/SetPasswordDialog";
@@ -17,6 +17,7 @@ const TUTORIAL_KEY = "philfida.quick-tutorial-seen";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [tutorialOpen, setTutorialOpen] = useState(
     () => localStorage.getItem(TUTORIAL_KEY) !== "true"
@@ -54,7 +55,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar onOpenTutorial={() => setTutorialOpen(true)} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        <div key={location.pathname} className="page-transition">
+          {children}
+        </div>
+      </main>
       {/* Nags until the blank/default password is replaced. */}
       <SetPasswordDialog onDismiss={() => setPasswordPromptDismissed(true)} />
       <QuickTutorialDialog

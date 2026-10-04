@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Ban, Inbox, Loader2, Pencil, Plus, RotateCcw } from "lucide-react";
+import { Inbox, Loader2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -45,6 +45,13 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+function getErrorDetail(err: unknown): string | undefined {
+  return (
+    (err as { response?: { data?: { detail?: string } } })?.response?.data
+      ?.detail
+  );
+}
+
 export default function CategoriesPage() {
   const { user } = useAuth();
   const canManage = user?.role === "admin" || user?.role === "encoder";
@@ -55,7 +62,7 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toDeactivate, setToDeactivate] = useState<Category | null>(null);
+  const [toDelete, setToDelete] = useState<Category | null>(null);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
   const rowsRequestId = useRef(0);
 
@@ -72,8 +79,9 @@ export default function CategoriesPage() {
       .then((categories) => {
         if (requestId === rowsRequestId.current) setRows(categories);
       })
-      .catch(() => {
-        if (requestId === rowsRequestId.current) toast.error("Failed to load categories");
+      .catch((err) => {
+        if (requestId === rowsRequestId.current)
+          toast.error(getErrorDetail(err) ?? "Failed to load categories");
       })
       .finally(() => {
         if (requestId === rowsRequestId.current) setLoading(false);
@@ -115,21 +123,21 @@ export default function CategoriesPage() {
       }
       setDialogOpen(false);
       fetchRows();
-    } catch {
-      toast.error("Failed to save category");
+    } catch (err) {
+      toast.error(getErrorDetail(err) ?? "Failed to save category");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDeactivate() {
-    if (!toDeactivate) return;
+  async function handleDelete() {
+    if (!toDelete) return;
     try {
-      await categoriesService.deleteCategory(toDeactivate.id);
-      toast.success(`Deactivated ${toDeactivate.name}`);
+      await categoriesService.deleteCategory(toDelete.id);
+      toast.success(`Deleted ${toDelete.name}`);
       fetchRows();
-    } catch {
-      toast.error("Failed to deactivate category");
+    } catch (err) {
+      toast.error(getErrorDetail(err) ?? "Failed to delete category");
     }
   }
 
@@ -140,8 +148,8 @@ export default function CategoriesPage() {
       await categoriesService.updateCategory(c.id, { is_active: true });
       toast.success(`Reactivated ${c.name}`);
       fetchRows();
-    } catch {
-      toast.error("Failed to reactivate category");
+    } catch (err) {
+      toast.error(getErrorDetail(err) ?? "Failed to reactivate category");
     } finally {
       setReactivatingId(null);
     }
@@ -224,12 +232,12 @@ export default function CategoriesPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => setToDeactivate(c)}
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => setToDelete(c)}
                               disabled={reactivatingId !== null}
-                              aria-label="Deactivate"
+                              aria-label={`Delete ${c.name}`}
                             >
-                              <Ban className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           ) : (
                             <Button
@@ -314,17 +322,21 @@ export default function CategoriesPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={!!toDeactivate}
-        onOpenChange={(o) => !o && setToDeactivate(null)}
-        title="Deactivate category?"
+        open={!!toDelete}
+        onOpenChange={(o) => !o && setToDelete(null)}
+        title="Delete category?"
         description={
-          toDeactivate
-            ? `${toDeactivate.name} will be marked inactive.`
-            : undefined
+          toDelete ? (
+            <>
+              <span className="font-medium text-foreground">{toDelete.name}</span> will
+              be removed from the active list. You can restore it later if
+              needed.
+            </>
+          ) : undefined
         }
-        confirmLabel="Deactivate"
+        confirmLabel="Delete"
         destructive
-        onConfirm={handleDeactivate}
+        onConfirm={handleDelete}
       />
     </AppLayout>
   );

@@ -23,7 +23,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
   const [passwordPromptDismissed, setPasswordPromptDismissed] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
-  const announcement = getLoginAnnouncement();
+  const [announcementCycleDone, setAnnouncementCycleDone] = useState(false);
+  const announcement = getLoginAnnouncement(new Date(), user?.id);
   const userId = user?.id;
   const announcementId = announcement?.id;
   const passwordPromptPending = !!user?.must_change_password && !passwordPromptDismissed;
@@ -33,7 +34,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       !userId ||
       !announcementId ||
       tutorialOpen ||
-      passwordPromptPending
+      passwordPromptPending ||
+      announcementCycleDone
     ) return;
     if (
       hasDismissedUpdate(userId, announcementId) ||
@@ -42,7 +44,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       return;
     }
     setAnnouncementOpen(true);
-  }, [announcementId, passwordPromptPending, tutorialOpen, userId]);
+  }, [announcementCycleDone, announcementId, passwordPromptPending, tutorialOpen, userId]);
 
   function handleTutorialChange(open: boolean) {
     setTutorialOpen(open);
@@ -64,10 +66,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           update={announcement}
           open={announcementOpen}
           onOpenChange={setAnnouncementOpen}
-          onDismiss={(dontShowAgain) =>
-            markUpdateSeen(user.id, announcement.id, dontShowAgain)
-          }
+          onDismiss={(dontShowAgain) => {
+            setAnnouncementCycleDone(true);
+            markUpdateSeen(user.id, announcement.id, dontShowAgain);
+          }}
           onReadMore={(dontShowAgain) => {
+            setAnnouncementCycleDone(true);
             markUpdateSeen(user.id, announcement.id, dontShowAgain);
             setAnnouncementOpen(false);
             navigate(`/settings/whats-new/${announcement.slug}`);

@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { PRODUCT_UPDATES, markUpdateSeen, type ProductUpdate } from "@/lib/whats-new";
+import { getVisibleUpdates, markUpdateSeen, type ProductUpdate } from "@/lib/whats-new";
 import { useAuth } from "@/store/AuthContext";
 
 export default function WhatsNewPage() {
@@ -29,7 +29,7 @@ export default function WhatsNewPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const update = slug
-    ? PRODUCT_UPDATES.find((entry) => entry.slug === slug)
+    ? getVisibleUpdates().find((entry) => entry.slug === slug)
     : undefined;
 
   if (slug && !update) return <Navigate to="/settings/whats-new" replace />;
@@ -63,7 +63,7 @@ export default function WhatsNewPage() {
               <div className="relative mb-6 flex flex-wrap items-center gap-2">
                 <Badge className="gap-1.5 shadow-sm">
                   <Sparkles className="h-3 w-3" />
-                  Product update
+                  {update.category ?? "Product update"}
                 </Badge>
                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <CalendarDays className="h-3.5 w-3.5" />
@@ -98,16 +98,24 @@ export default function WhatsNewPage() {
               ))}
             </ol>
 
+            {update.tryIt && (
             <div className="mt-8 flex items-start gap-4 rounded-2xl border border-primary/20 bg-primary/[0.06] p-5 text-sm shadow-sm">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <CircleCheck className="h-5 w-5 text-primary" />
               </span>
               <p className="leading-relaxed text-muted-foreground">
-                To try it, open <strong className="text-foreground">Reports</strong>,
-                choose <strong className="text-foreground">Stock Card</strong>, and
-                select an item with recorded activity.
+                {update.tryIt.map((segment, index) =>
+                  segment.bold ? (
+                    <strong key={index} className="text-foreground">
+                      {segment.text}
+                    </strong>
+                  ) : (
+                    <span key={index}>{segment.text}</span>
+                  )
+                )}
               </p>
             </div>
+            )}
           </article>
         </PageWrapper>
         <WhatsNewDialog
@@ -125,8 +133,9 @@ export default function WhatsNewPage() {
     );
   }
 
-  const latest = PRODUCT_UPDATES[0];
-  const earlier = PRODUCT_UPDATES.slice(1);
+  const visibleUpdates = getVisibleUpdates();
+  const latest = visibleUpdates[0];
+  const earlier = visibleUpdates.slice(1);
 
   return (
     <AppLayout>
@@ -181,7 +190,7 @@ export default function WhatsNewPage() {
                   <Card className="border-primary/15 transition-shadow hover:shadow-md">
                     <CardHeader className="pb-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">Product update</Badge>
+                        <Badge variant="secondary">{entry.category ?? "Product update"}</Badge>
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <CalendarDays className="h-3.5 w-3.5" />
                           {formatDate(entry.publishedAt)}

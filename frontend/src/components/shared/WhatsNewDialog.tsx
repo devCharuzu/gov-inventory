@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -103,9 +103,26 @@ export default function WhatsNewDialog({
               }).format(new Date(update.publishedAt))}
             </time>
             <span aria-hidden="true">·</span>
-            <span>Stock card</span>
+            <span>{update.category ?? "Product update"}</span>
           </div>
 
+          {update.quickLook ? (
+            <div className="rounded-xl border bg-muted/40 p-3">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                A quick look
+              </p>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-1">
+                {update.quickLook.steps.map((step, index) => (
+                  <Fragment key={step.label}>
+                    {index > 0 && (
+                      <ArrowRight className="mt-3 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    )}
+                    <FlowStep icon={step.icon} label={step.label} />
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div className="rounded-xl border bg-muted/40 p-3">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               A quick look
@@ -118,6 +135,7 @@ export default function WhatsNewDialog({
               <FlowStep icon={PackageCheck} label="Balance updated" />
             </div>
           </div>
+          )}
 
           <div className="flex min-h-11 items-center gap-2.5 text-sm text-muted-foreground">
             <Checkbox

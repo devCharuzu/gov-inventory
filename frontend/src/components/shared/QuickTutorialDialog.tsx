@@ -27,7 +27,7 @@ export default function QuickTutorialDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(90vh,760px)] max-w-4xl overflow-y-auto p-0"
+        className="max-h-[min(90vh,760px)] max-w-[calc(100%-2rem)] overflow-y-auto p-0 sm:max-w-4xl"
         showCloseButton={false}
       >
         <div className="relative overflow-hidden rounded-t-xl bg-primary px-8 pb-6 pt-6 text-primary-foreground">

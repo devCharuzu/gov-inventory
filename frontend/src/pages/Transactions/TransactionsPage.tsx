@@ -396,12 +396,6 @@ export default function TransactionsPage() {
     return row.kind === "batch" ? row.lines : [row.txn];
   }
 
-  function rowLabel(row: DisplayRow): string {
-    return row.kind === "batch"
-      ? `batch ${row.master}`
-      : (row.txn.reference_number ?? "transaction");
-  }
-
   async function handleVoid() {
     if (!toVoid) return;
     try {

@@ -59,6 +59,13 @@ export const reportsService = {
     return fetchPdfUrl("/reports/request-forms", params);
   },
 
+  /** Returns an object URL for the combined multi-item batch slip PDF. */
+  getBatchSlip(masterReference: string): Promise<string> {
+    return fetchPdfUrl(
+      `/reports/batch-slip/${encodeURIComponent(masterReference)}`
+    );
+  },
+
   /** Returns an object URL for the receiving report PDF (IN txn). */
   getReceivedForm(transactionId: string): Promise<string> {
     return fetchPdfUrl(`/reports/received-form/${transactionId}`);

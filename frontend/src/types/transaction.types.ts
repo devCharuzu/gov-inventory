@@ -40,3 +40,22 @@ export interface CreateOutRequest {
   transaction_date: string;
   remarks?: string;
 }
+
+export interface StockOutLineRequest {
+  item_id: string;
+  quantity: number;
+}
+
+export interface CreateOutBatchRequest {
+  items: StockOutLineRequest[];
+  recipient_name: string;
+  recipient_department?: string;
+  transaction_date: string;
+  remarks?: string;
+}
+
+export interface StockOutBatch {
+  reference_number: string;
+  transaction_ids: string[];
+  item_count: number;
+}

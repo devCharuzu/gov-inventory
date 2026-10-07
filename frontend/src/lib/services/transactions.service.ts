@@ -2,7 +2,9 @@ import { api } from "@/lib/api";
 import type { PaginatedResponse } from "@/types/pagination.types";
 import type {
   CreateInRequest,
+  CreateOutBatchRequest,
   CreateOutRequest,
+  StockOutBatch,
   Transaction,
   TransactionType,
 } from "@/types/transaction.types";
@@ -39,6 +41,14 @@ export const transactionsService = {
 
   async createOut(req: CreateOutRequest): Promise<Transaction> {
     const { data } = await api.post<Transaction>("/transactions/out", req);
+    return data;
+  },
+
+  async createOutBatch(req: CreateOutBatchRequest): Promise<StockOutBatch> {
+    const { data } = await api.post<StockOutBatch>(
+      "/transactions/out/batch",
+      req
+    );
     return data;
   },
 

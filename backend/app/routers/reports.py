@@ -186,6 +186,46 @@ def request_forms(
     return _pdf_response(pdf, f"request-forms-{len(txns)}.pdf")
 
 
+@router.get("/batch-slip/{master_reference}")
+def batch_slip(
+    master_reference: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """Render one combined requisition/issue slip for a multi-item batch."""
+    from app.services.report_files import build_batch_slip_pdf
+
+    prefix = master_reference.strip()
+    if not prefix:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Batch not found",
+        )
+    escaped = (
+        prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.transaction_type == TransactionType.OUT,
+            Transaction.voided.is_(False),
+            or_(
+                Transaction.reference_number == prefix,
+                Transaction.reference_number.like(escaped + "-%", escape="\\"),
+            ),
+        )
+        .order_by(Transaction.reference_number)
+        .all()
+    )
+    if not txns:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Batch not found",
+        )
+    pdf = build_batch_slip_pdf(db, prefix, txns)
+    return _pdf_response(pdf, f"batch-slip-{prefix}.pdf")
+
+
 @router.get("/received-form/{transaction_id}")
 def received_form(
     transaction_id: uuid.UUID,

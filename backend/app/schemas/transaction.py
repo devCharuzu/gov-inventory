@@ -50,6 +50,41 @@ class StockOutCreate(BaseModel):
     transaction_date: datetime | None = None
 
 
+class StockOutLineCreate(BaseModel):
+    """One item line inside a multi-item stock-out batch."""
+
+    item_id: uuid.UUID
+    quantity: int = Field(gt=0, le=1_000_000)
+
+
+class StockOutBatchCreate(BaseModel):
+    """Payload for recording a multi-item stock-out as one atomic batch."""
+
+    items: list[StockOutLineCreate] = Field(min_length=1, max_length=10)
+    recipient_name: str | None = None
+    recipient_department: str | None = None
+    transaction_date: datetime | None = None
+    remarks: str | None = None
+
+    @field_validator("items", mode="after")
+    @classmethod
+    def no_duplicate_items(cls, value):
+        ids = [line.item_id for line in value]
+        if len(set(ids)) != len(ids):
+            raise ValueError(
+                "The same item cannot appear twice in one transaction"
+            )
+        return value
+
+
+class StockOutBatchOut(BaseModel):
+    """Result of a multi-item stock-out: one master reference for the batch."""
+
+    reference_number: str
+    transaction_ids: list[uuid.UUID]
+    item_count: int
+
+
 class TransactionOut(BaseModel):
     """Transaction representation returned to clients."""
 

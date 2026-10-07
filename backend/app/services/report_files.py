@@ -118,9 +118,73 @@ def regenerate_all_reports(db: Session) -> int:
     """Re-render every active transaction report with current settings."""
     count = 0
     for txn in db.query(Transaction).filter(Transaction.voided.is_(False)).all():
+        if is_batch_line(txn.reference_number):
+            continue  # covered by the combined batch slip
         if save_transaction_report(db, txn):
             count += 1
     return count
+
+
+_BATCH_LINE_RE = re.compile(r"^REL-\d{4}-\d+-\d{2}$")
+
+
+def is_batch_line(reference_number: str | None) -> bool:
+    """Whether a reference is a suffixed line of a multi-item stock-out batch."""
+    return bool(reference_number) and _BATCH_LINE_RE.match(reference_number) is not None
+
+
+def build_batch_slip_pdf(
+    db: Session, master_reference: str, txns: list[Transaction]
+) -> bytes:
+    """Render one combined requisition/issue slip for a multi-item batch."""
+    ordered = sorted(txns, key=lambda t: t.reference_number or "")
+    lines = []
+    for txn in ordered:
+        item = db.query(Item).filter(Item.id == txn.item_id).first()
+        lines.append(
+            {
+                "quantity": txn.quantity,
+                "unit": item.unit if item and item.unit else "-",
+                "name": item.name if item else "",
+            }
+        )
+    first = ordered[0]
+    return render_template_to_pdf(
+        "request_form.html",
+        {
+            "batch_slip": {
+                "reference_number": master_reference,
+                "lines": lines,
+                "transaction": first,
+                "issue_date": first.transaction_date.strftime("%B %d, %Y"),
+                "certifier": _get_signatory(db, "certifier_id"),
+                "issuer": _get_signatory(db, "issuer_id"),
+                "region": _get_region(db, first.region_id),
+            }
+        },
+    )
+
+
+def save_batch_slip(
+    db: Session, master_reference: str, txns: list[Transaction]
+) -> str | None:
+    """Render and upsert the combined batch slip without affecting transactions."""
+    try:
+        pdf = build_batch_slip_pdf(db, master_reference, txns)
+        name = _safe_name(master_reference)
+        existing = db.get(ReportDocument, (db.info["region_id"], name))
+        if existing:
+            existing.content = pdf
+            existing.size = len(pdf)
+            existing.modified = datetime.now(timezone.utc)
+        else:
+            db.add(ReportDocument(name=name, content=pdf, size=len(pdf)))
+        db.commit()
+        return name
+    except Exception:  # pragma: no cover - report generation is best effort
+        logging.getLogger(__name__).exception("Could not generate batch slip PDF")
+        db.rollback()
+        return None
 
 
 def list_reports(db: Session) -> list[dict]:

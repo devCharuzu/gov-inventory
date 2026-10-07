@@ -63,6 +63,110 @@
   </style>
 </head>
 <body>
+  {% macro item_table(lines) %}
+  <table class="grid">
+    <thead>
+      <tr><th class="qty">Quantity</th><th class="unit">Unit</th><th>Item</th></tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="qty">{{ line.quantity }}</td>
+        <td class="unit">{{ line.unit }}</td>
+        <td class="item">{{ line.name }}</td>
+      </tr>
+      {% endfor %}
+      {% for _ in range(12 - (lines|length)) %}
+      <tr><td class="qty">&nbsp;</td><td class="unit">&nbsp;</td><td class="item">&nbsp;</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endmacro %}
+  {% if batch_slip is defined %}
+  <div class="request-page">
+  <div class="sheet">
+
+    <!-- LEFT: Request for Office Supplies Slip (all batch items) -->
+    <div class="slip">
+      <div class="head">
+        <div class="logo"><img class="logo-img" src="philfida-logo.png" alt="PhilFIDA"></div>
+        <div class="org">
+          <div class="l1">Republic of the Philippines</div>
+          <div class="l2">Department of Agriculture</div>
+          <div class="l3">PHILIPPINE FIBER INDUSTRY DEVELOPMENT AUTHORITY (PhilFIDA)</div>
+          <div class="l4">{{ batch_slip.region }}</div>
+        </div>
+      </div>
+
+      <div class="title">Request for Office Supplies Slip</div>
+
+      <div class="meta">Date: <span class="line">{{ batch_slip.issue_date }}</span></div>
+      <div class="meta">Control No.: <span class="line">{{ batch_slip.reference_number }}</span></div>
+
+      <div class="namerow">
+        Name: <span class="nm">{{ batch_slip.transaction.recipient_name or "" }}</span>
+        &nbsp; Unit: <span class="un">{{ batch_slip.transaction.recipient_department or "" }}</span>
+      </div>
+
+      {{ item_table(batch_slip.lines) }}
+
+      <div class="signs">
+        <div>REQUESTED BY:</div>
+        <div class="sigline">Signature of Employee</div>
+        <div class="approve">CERTIFIED BY:</div>
+        <div class="sigline">
+          {% if batch_slip.certifier %}
+            <div class="sig-name">{{ batch_slip.certifier.full_name }}</div>
+            <div class="sig-desig">{{ batch_slip.certifier.designation }}</div>
+          {% else %}
+            &nbsp;
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Office Supplies Issuance Slip (all batch items) -->
+    <div class="slip">
+      <div class="head">
+        <div class="logo"><img class="logo-img" src="philfida-logo.png" alt="PhilFIDA"></div>
+        <div class="org">
+          <div class="l1">Republic of the Philippines</div>
+          <div class="l2">Department of Agriculture</div>
+          <div class="l3">PHILIPPINE FIBER INDUSTRY DEVELOPMENT AUTHORITY (PhilFIDA)</div>
+          <div class="l4">{{ batch_slip.region }}</div>
+        </div>
+      </div>
+
+      <div class="title">Office Supplies Issuance Slip</div>
+
+      <div class="meta">Date: <span class="line">{{ batch_slip.issue_date }}</span></div>
+      <div class="meta">Control No.: <span class="line">{{ batch_slip.reference_number }}</span></div>
+
+      <div class="namerow">
+        Name: <span class="nm">{{ batch_slip.transaction.recipient_name or "" }}</span>
+        &nbsp; Unit: <span class="un">{{ batch_slip.transaction.recipient_department or "" }}</span>
+      </div>
+
+      {{ item_table(batch_slip.lines) }}
+
+      <div class="signs">
+        <div>RECEIVED BY:</div>
+        <div class="sigline">Signature of Employee</div>
+        <div class="approve">ISSUED BY:</div>
+        <div class="sigline">
+          {% if batch_slip.issuer %}
+            <div class="sig-name">{{ batch_slip.issuer.full_name }}</div>
+            <div class="sig-desig">{{ batch_slip.issuer.designation }}</div>
+          {% else %}
+            &nbsp;
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+  {% else %}
   {% set forms = batch_forms if batch_forms is defined else [{
     "transaction": transaction,
     "item": item,
@@ -190,5 +294,6 @@
   </div>
   </div>
   {% endfor %}
+  {% endif %}
 </body>
 </html>

@@ -20,10 +20,12 @@ from app.models import (
 from app.schemas.transaction import (
     PaginatedTransactions,
     StockInCreate,
+    StockOutBatchCreate,
+    StockOutBatchOut,
     StockOutCreate,
     TransactionOut,
 )
-from app.services.report_files import save_transaction_report
+from app.services.report_files import save_batch_slip, save_transaction_report
 from app.services.numbering import next_number
 from app.utils.security import get_current_user, require_role
 
@@ -247,6 +249,95 @@ def stock_out(
     )
     save_transaction_report(db, txn)
     return txn
+
+
+@router.post(
+    "/out/batch", response_model=StockOutBatchOut, status_code=status.HTTP_201_CREATED
+)
+def stock_out_batch(
+    payload: StockOutBatchCreate,
+    request: Request,
+    current_user: User = Depends(encoder_or_admin),
+    db: Session = Depends(get_db),
+) -> StockOutBatchOut:
+    """Record a multi-item stock-out as one atomic batch.
+
+    Creates one transaction row per item (up to 10). The first row carries
+    the master reference (REL-YYYY-XXXX); the rest are suffixed
+    (REL-YYYY-XXXX-02 … -10) so every row keeps a unique reference while
+    staying visibly grouped. Stock is validated for ALL items before
+    anything is written, so the batch is all-or-nothing.
+    """
+    # Lock every item first so concurrent batches cannot oversell the same stock.
+    items_by_id: dict[uuid.UUID, Item] = {}
+    for line in payload.items:
+        items_by_id[line.item_id] = _get_item_or_404(db, line.item_id, lock=True)
+
+    for line in payload.items:
+        item = items_by_id[line.item_id]
+        if item.quantity < line.quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Insufficient stock for {item.name}: "
+                    f"only {item.quantity} available"
+                ),
+            )
+
+    master_ref = _next_reference(db, TransactionType.OUT)
+    txn_date = payload.transaction_date or datetime.now(timezone.utc)
+
+    txns: list[Transaction] = []
+    for index, line in enumerate(payload.items):
+        item = items_by_id[line.item_id]
+        ref = master_ref if index == 0 else f"{master_ref}-{index + 1:02d}"
+        txn = Transaction(
+            transaction_type=TransactionType.OUT,
+            reference_number=ref,
+            item_id=item.id,
+            quantity=line.quantity,
+            recipient_name=payload.recipient_name,
+            recipient_department=payload.recipient_department,
+            remarks=payload.remarks,
+            transaction_date=txn_date,
+            created_by=current_user.id,
+        )
+        item.quantity -= line.quantity
+        db.add(txn)
+        db.add(item)
+        txns.append(txn)
+
+    db.commit()
+    for txn in txns:
+        db.refresh(txn)
+
+    _audit(
+        db,
+        user=current_user,
+        action="STOCK_OUT_BATCH",
+        request=request,
+        details={
+            "reference_number": master_ref,
+            "item_count": len(txns),
+            "lines": [
+                {
+                    "item_id": str(t.item_id),
+                    "quantity": t.quantity,
+                    "reference_number": t.reference_number,
+                }
+                for t in txns
+            ],
+        },
+    )
+
+    # One combined slip for the whole batch (best effort, like single slips).
+    save_batch_slip(db, master_ref, txns)
+
+    return StockOutBatchOut(
+        reference_number=master_ref,
+        transaction_ids=[t.id for t in txns],
+        item_count=len(txns),
+    )
 
 
 @router.get("/{transaction_id}", response_model=TransactionOut)

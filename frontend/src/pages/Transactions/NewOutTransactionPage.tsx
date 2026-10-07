@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AxiosError } from "axios";
@@ -57,6 +57,18 @@ const emptyLine = () => ({
   item_id: "",
   quantity: undefined as unknown as number,
 });
+
+/** Item ids that appear more than once in the given list. */
+function findDuplicateIds(itemIds: (string | undefined)[]): Set<string> {
+  const seen = new Set<string>();
+  const dupes = new Set<string>();
+  for (const id of itemIds) {
+    if (!id) continue;
+    if (seen.has(id)) dupes.add(id);
+    else seen.add(id);
+  }
+  return dupes;
+}
 
 export default function NewOutTransactionPage() {
   const navigate = useNavigate();
@@ -115,19 +127,20 @@ export default function NewOutTransactionPage() {
     };
   }, [presetItemId, firstFieldId]);
 
-  const watchedItems = form.watch("items");
+  // Real-time subscription to the item rows. Duplicate detection is kept in
+  // state (not derived during render) so it clears the instant a duplicate
+  // is resolved — by removing the row or picking a different item.
+  const watchedItems = useWatch({ control: form.control, name: "items" });
+  const [duplicateIds, setDuplicateIds] = useState<Set<string>>(new Set());
   const maxReached = fields.length >= MAX_ITEMS;
 
-  // Item ids selected more than once — flagged inline per row.
-  const duplicateIds = useMemo(() => {
-    const seen = new Set<string>();
-    const dupes = new Set<string>();
-    for (const line of watchedItems ?? []) {
-      if (!line?.item_id) continue;
-      if (seen.has(line.item_id)) dupes.add(line.item_id);
-      seen.add(line.item_id);
-    }
-    return dupes;
+  // Catch-all: recompute whenever the watched rows change (append, preset
+  // fill, or any other path). The mutation handlers below also recompute
+  // synchronously so the UI updates in the same tick.
+  useEffect(() => {
+    setDuplicateIds(
+      findDuplicateIds((watchedItems ?? []).map((line) => line?.item_id))
+    );
   }, [watchedItems]);
 
   const exceedsAt = (index: number): number | null => {
@@ -143,6 +156,12 @@ export default function NewOutTransactionPage() {
 
   const handleRemove = (index: number) => {
     const id = fields[index]?.id;
+    // Recompute duplicates synchronously from the post-removal values so a
+    // resolved duplicate clears instantly, without waiting for watch updates.
+    const nextIds = (form.getValues("items") ?? [])
+      .filter((_, i) => i !== index)
+      .map((line) => line?.item_id);
+    setDuplicateIds(findDuplicateIds(nextIds));
     remove(index);
     if (id) {
       setSelectedItems((prev) => {
@@ -332,6 +351,14 @@ export default function NewOutTransactionPage() {
                                           ...prev,
                                           [field.id]: selected,
                                         }));
+                                        // Recompute synchronously so the duplicate
+                                        // error appears/clears in the same tick.
+                                        const nextIds = (
+                                          form.getValues("items") ?? []
+                                        ).map((line, i) =>
+                                          i === index ? selected.id : line?.item_id
+                                        );
+                                        setDuplicateIds(findDuplicateIds(nextIds));
                                         form.trigger(`items.${index}.quantity`);
                                       }}
                                     />

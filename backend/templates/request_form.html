@@ -76,7 +76,7 @@
         <td class="item">{{ line.name }}</td>
       </tr>
       {% endfor %}
-      {% for _ in range(12 - (lines|length)) %}
+      {% for _ in range(10 - (lines|length)) %}
       <tr><td class="qty">&nbsp;</td><td class="unit">&nbsp;</td><td class="item">&nbsp;</td></tr>
       {% endfor %}
     </tbody>

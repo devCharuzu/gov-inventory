@@ -198,3 +198,20 @@
     animation: none;
   }
 }
+
+/* Toast notifications: quick, smooth entrance so they never feel in the way.
+   Sonner v2 animates [data-sonner-toast] via transition and injects its
+   stylesheet at runtime, so this override uses !important to win. */
+[data-sonner-toast] {
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.25s ease-out,
+    height 0.3s ease,
+    box-shadow 0.2s !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] {
+    transition: none !important;
+  }
+}

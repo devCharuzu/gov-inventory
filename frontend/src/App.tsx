@@ -50,7 +50,7 @@ function ThemedToaster() {
     return () => observer.disconnect();
   }, []);
 
-  return <Toaster richColors position="top-right" theme={theme} />;
+  return <Toaster richColors position="top-center" theme={theme} />;
 }
 
 export default function App() {

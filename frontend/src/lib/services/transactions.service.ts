@@ -59,6 +59,15 @@ export const transactionsService = {
     return data;
   },
 
+  async voidStockOutBatch(
+    masterReference: string
+  ): Promise<{ voided: number }> {
+    const { data } = await api.delete<{ voided: number }>(
+      `/transactions/out/batch/${encodeURIComponent(masterReference)}`
+    );
+    return data;
+  },
+
   async hardDeleteTransaction(id: string): Promise<{ deleted: number }> {
     const { data } = await api.delete<{ deleted: number }>(
       `/transactions/hard/${id}`

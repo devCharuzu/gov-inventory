@@ -340,6 +340,57 @@ def stock_out_batch(
     )
 
 
+@router.delete("/out/batch/{master_reference}", response_model=dict)
+def void_stock_out_batch(
+    master_reference: str,
+    request: Request,
+    current_user: User = Depends(admin_only),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Void every line of a multi-item stock-out batch, reversing stock."""
+    prefix = master_reference.strip()
+    if not prefix:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found"
+        )
+    escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.transaction_type == TransactionType.OUT,
+            or_(
+                Transaction.reference_number == prefix,
+                Transaction.reference_number.like(escaped + "-%", escape="\\"),
+            ),
+        )
+        .all()
+    )
+    if not txns:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found"
+        )
+    voided = 0
+    for txn in txns:
+        if txn.voided:
+            continue
+        item = db.query(Item).filter(Item.id == txn.item_id).first()
+        if item:
+            item.quantity += txn.quantity
+            db.add(item)
+        txn.voided = True
+        db.add(txn)
+        voided += 1
+    db.commit()
+    _audit(
+        db,
+        user=current_user,
+        action="VOID_STOCK_OUT_BATCH",
+        request=request,
+        details={"reference_number": prefix, "voided": voided},
+    )
+    return {"voided": voided}
+
+
 @router.get("/{transaction_id}", response_model=TransactionOut)
 def get_transaction(
     transaction_id: uuid.UUID,

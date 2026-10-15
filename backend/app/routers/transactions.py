@@ -45,6 +45,7 @@ def _audit(
     request: Request | None = None,
     entity_id: str | None = None,
     details: dict | None = None,
+    commit: bool = True,
 ) -> None:
     """Persist an audit log entry for a transaction action."""
     db.add(
@@ -57,7 +58,33 @@ def _audit(
             ip_address=request.client.host if request and request.client else None,
         )
     )
-    db.commit()
+    if commit:
+        db.commit()
+
+
+def _transaction_snapshot(
+    txn: Transaction, *, restore_stock_delta: int = 0
+) -> dict:
+    """Return the full transaction row in a JSON-safe form for recovery."""
+    return {
+        "id": str(txn.id),
+        "region_id": str(txn.region_id),
+        "transaction_type": txn.transaction_type.value,
+        "reference_number": txn.reference_number,
+        "item_id": str(txn.item_id),
+        "quantity": txn.quantity,
+        "recipient_name": txn.recipient_name,
+        "recipient_department": txn.recipient_department,
+        "purpose": txn.purpose,
+        "condition": txn.condition,
+        "remarks": txn.remarks,
+        "transaction_date": txn.transaction_date.isoformat(),
+        "created_by": str(txn.created_by),
+        "voided": txn.voided,
+        "restore_stock_delta": restore_stock_delta,
+        "created_at": txn.created_at.isoformat(),
+        "updated_at": txn.updated_at.isoformat(),
+    }
 
 
 def _next_reference(db: Session, txn_type: TransactionType) -> str:
@@ -429,27 +456,57 @@ def bulk_delete_transactions(
     from app.services import report_files
 
     count = 0
+    snapshots: list[dict] = []
     for txn_id in body.ids:
-        txn = db.query(Transaction).filter(Transaction.id == txn_id).first()
+        txn = (
+            db.query(Transaction)
+            .filter(Transaction.id == txn_id)
+            .with_for_update(of=Transaction)
+            .first()
+        )
         if not txn:
             continue
+        restore_stock_delta = 0
         if not txn.voided:
-            item = db.query(Item).filter(Item.id == txn.item_id).first()
+            item = (
+                db.query(Item)
+                .filter(Item.id == txn.item_id)
+                .with_for_update(of=Item)
+                .first()
+            )
             if item:
                 if txn.transaction_type == TransactionType.IN:
+                    restore_stock_delta = min(item.quantity, txn.quantity)
                     item.quantity = max(0, item.quantity - txn.quantity)
                 else:
+                    restore_stock_delta = -txn.quantity
                     item.quantity += txn.quantity
                 db.add(item)
+        snapshots.append(
+            _transaction_snapshot(
+                txn, restore_stock_delta=restore_stock_delta
+            )
+        )
         # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
         report_files.delete_transaction_report(
             db, txn.reference_number, txn.id
         )
         db.delete(txn)
         count += 1
+    _audit(
+        db,
+        user=current_user,
+        action="DELETE_TRANSACTIONS",
+        request=request,
+        details={
+            "count": count,
+            "ids": [str(i) for i in body.ids],
+            "snapshot_version": 1,
+            "transactions": snapshots,
+        },
+        commit=False,
+    )
     db.commit()
-    _audit(db, user=current_user, action="DELETE_TRANSACTIONS", request=request,
-           details={"count": count, "ids": [str(i) for i in body.ids]})
     return {"deleted": count}
 
 
@@ -517,24 +574,54 @@ def hard_delete_transaction(
     db: Session = Depends(get_db),
 ) -> dict:
     """Hard-delete a single transaction (admin only). Reverses stock if not already voided."""
-    txn = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    txn = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id)
+        .with_for_update(of=Transaction)
+        .first()
+    )
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
     if not txn.voided:
-        item = db.query(Item).filter(Item.id == txn.item_id).first()
+        item = (
+            db.query(Item)
+            .filter(Item.id == txn.item_id)
+            .with_for_update(of=Item)
+            .first()
+        )
         if item:
             if txn.transaction_type == TransactionType.IN:
+                restore_stock_delta = min(item.quantity, txn.quantity)
                 item.quantity = max(0, item.quantity - txn.quantity)
             else:
                 item.quantity += txn.quantity
+                restore_stock_delta = -txn.quantity
             db.add(item)
+        else:
+            restore_stock_delta = 0
+    else:
+        restore_stock_delta = 0
     ref = txn.reference_number
+    snapshot = _transaction_snapshot(
+        txn, restore_stock_delta=restore_stock_delta
+    )
     # Remove the stored PDF slip so it doesn't orphan in Reports > Documents.
     from app.services import report_files
 
     report_files.delete_transaction_report(db, ref, txn.id)
     db.delete(txn)
+    _audit(
+        db,
+        user=current_user,
+        action="DELETE_TRANSACTION",
+        request=request,
+        entity_id=str(txn.id),
+        details={
+            "reference_number": ref,
+            "snapshot_version": 1,
+            "transaction": snapshot,
+        },
+        commit=False,
+    )
     db.commit()
-    _audit(db, user=current_user, action="DELETE_TRANSACTION", request=request,
-           details={"reference_number": ref})
     return {"deleted": 1}

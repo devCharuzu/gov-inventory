@@ -37,4 +37,17 @@ export const auditService = {
     });
     return data;
   },
+
+  async restoreTransactions(auditLogIds: string[]): Promise<{
+    restored: number;
+    already_present: number;
+    transaction_ids: string[];
+  }> {
+    const { data } = await api.post<{
+      restored: number;
+      already_present: number;
+      transaction_ids: string[];
+    }>("/audit/restore-transactions", { audit_log_ids: auditLogIds });
+    return data;
+  },
 };

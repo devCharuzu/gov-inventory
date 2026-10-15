@@ -555,6 +555,23 @@ function PasswordConfirmDialog({
 /* -------------------------------------------------------------------------- */
 /* Audit tab                                                                  */
 /* -------------------------------------------------------------------------- */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function restorableTransactionCount(log: AuditLog): number {
+  const details = log.details;
+  if (!details || details.snapshot_version !== 1) return 0;
+
+  if (log.action === "DELETE_TRANSACTION") {
+    return isRecord(details.transaction) ? 1 : 0;
+  }
+  if (log.action === "DELETE_TRANSACTIONS" && Array.isArray(details.transactions)) {
+    return details.transactions.filter(isRecord).length;
+  }
+  return 0;
+}
+
 function AuditTab() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -562,6 +579,8 @@ function AuditTab() {
   const [actions, setActions] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmRestoreSelected, setConfirmRestoreSelected] = useState(false);
+  const [restoringSelected, setRestoringSelected] = useState(false);
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
@@ -570,6 +589,13 @@ function AuditTab() {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const logsRequestId = useRef(0);
+  const selectedRestoreLogs = logs.filter(
+    (log) => selected.has(log.id) && restorableTransactionCount(log) > 0
+  );
+  const selectedRestoreCount = selectedRestoreLogs.reduce(
+    (count, log) => count + restorableTransactionCount(log),
+    0
+  );
 
   useEffect(() => {
     let active = true;
@@ -645,6 +671,35 @@ function AuditTab() {
     }
   }
 
+  async function handleRestoreSelected() {
+    const ids = selectedRestoreLogs.map((log) => log.id);
+    if (!ids.length || restoringSelected) return;
+    setRestoringSelected(true);
+    try {
+      const result = await auditService.restoreTransactions(ids);
+      if (result.restored > 0) {
+        const alreadyPresent = result.already_present
+          ? `; ${result.already_present} already restored`
+          : "";
+        toast.success(
+          `Restored ${result.restored} transaction${result.restored === 1 ? "" : "s"}${alreadyPresent}`
+        );
+      } else {
+        toast.info("The selected transaction is already restored");
+      }
+      setSelected(new Set());
+      setConfirmRestoreSelected(false);
+      fetchLogs();
+    } catch (err) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail;
+      toast.error(detail ?? "Failed to restore selected transactions");
+    } finally {
+      setRestoringSelected(false);
+    }
+  }
+
   async function handleDeleteAll() {
     const ids = logs.map((l) => l.id);
     try {
@@ -717,6 +772,17 @@ function AuditTab() {
             Delete ({selected.size})
           </Button>
         )}
+        {selectedRestoreLogs.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmRestoreSelected(true)}
+            disabled={restoringSelected}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Restore ({selectedRestoreCount})
+          </Button>
+        )}
         {logs.length > 0 && (
           <Button
             variant="outline"
@@ -779,7 +845,17 @@ function AuditTab() {
                     {log.user_name ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{log.action}</Badge>
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge variant="outline">{log.action}</Badge>
+                      {(log.action === "DELETE_TRANSACTION" ||
+                        log.action === "DELETE_TRANSACTIONS") && (
+                        <span className="text-xs text-muted-foreground">
+                          {restorableTransactionCount(log) > 0
+                            ? `${restorableTransactionCount(log)} restorable`
+                            : "No restore snapshot"}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm">
                     {log.entity_type ?? "—"}
@@ -819,6 +895,14 @@ function AuditTab() {
         </Table>
       </div>
 
+      <ConfirmDialog
+        open={confirmRestoreSelected}
+        onOpenChange={setConfirmRestoreSelected}
+        title={`Restore ${selectedRestoreCount} deleted transaction${selectedRestoreCount === 1 ? "" : "s"}?`}
+        description={`Only the selected deletion entries will be restored. A selected group deletion restores every transaction in that group and updates the linked item quantities. Transaction PDFs will be regenerated.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestoreSelected}
+      />
       <ConfirmDialog
         open={confirmDeleteSelected}
         onOpenChange={setConfirmDeleteSelected}
